@@ -3,15 +3,6 @@ Deterministic Seed-Based Procedural Fantasy World Generator
 ============================================================
 A fully reproducible world generation system using seeded random generators.
 Generates a 200x200 grid with tectonics, climate, lakes, and biomes.
-
-NOTE: River system has been removed and is awaiting new implementation.
-
-Advanced features:
-- Spatial coherence for biomes (neighbor influence, smoothing)
-- Minimum biome cluster size enforcement (no isolated tiles)
-- Ocean topology validation (no inland ocean patches)
-- Lake coast buffer and basin detection
-- Strict percentage enforcement with post-processing
 """
 
 import numpy as np
