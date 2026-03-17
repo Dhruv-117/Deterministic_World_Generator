@@ -3,6 +3,10 @@ Deterministic Seed-Based Procedural Fantasy World Generator
 ============================================================
 A fully reproducible world generation system using seeded random generators.
 Generates a 200x200 grid with tectonics, climate, lakes, and biomes.
+<<<<<<< HEAD
+=======
+
+>>>>>>> 85da3d6 (Directory changes)
 """
 
 import numpy as np
