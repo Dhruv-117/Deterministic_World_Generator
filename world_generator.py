@@ -3,12 +3,10 @@ Deterministic Seed-Based Procedural Fantasy World Generator
 ============================================================
 A fully reproducible world generation system using seeded random generators.
 Generates a 200x200 grid with tectonics, climate, lakes, and biomes.
-<<<<<<< HEAD
-=======
 
->>>>>>> 85da3d6 (Directory changes)
 """
 
+import os
 import numpy as np
 import pandas as pd
 from scipy import ndimage
@@ -50,7 +48,7 @@ REGIONS_Y = WORLD_HEIGHT // REGION_SIZE  # 25
 # Target percentages
 LAND_PERCENT = 0.50
 OCEAN_PERCENT = 0.50
-MOUNTAIN_PERCENT_OF_LAND = 0.10
+MOUNTAIN_PERCENT_OF_LAND = 0.15  # 15% mountains (elevated terrain backbone)
 LAKE_PERCENT_MIN = 0.02  # Min 2% of land for lakes
 LAKE_PERCENT_MAX = 0.05  # Max 5% of land for lakes
 
@@ -66,17 +64,73 @@ DESERT_LAKE_PROBABILITIES = {0: 0.70, 1: 0.20, 2: 0.10}
 # Biome constraints
 MIN_BIOME_CLUSTER_SIZE = 4  # Minimum connected tiles for any biome
 
-# Biome targets (as percentage of non-mountain land)
-# Climate-based system with temperature/moisture/elevation dependencies
+# Biome category targets (as percentage of non-mountain land)
+# Natural distribution: mountains 15%, hills 25%, plains 35%, forests 18%, deserts 10%, snow 7%, wetlands 3%
+# These are base targets; seed-based variance makes some seeds desert-dominant, snow-dominant, etc.
+BIOME_CATEGORY_TARGETS = {
+    'mountains': (0.13, 0.17),     # 15% ± 2%
+    'hills': (0.22, 0.28),         # 25% ± 3%
+    'plains': (0.32, 0.38),        # 35% ± 3%
+    'forests': (0.15, 0.22),       # 18% ± 4% (climate-variable)
+    'deserts': (0.07, 0.13),       # 10% ± 3% (climate-variable)
+    'snow': (0.04, 0.10),          # 7% ± 3% (latitude-variable)
+    'wetlands': (0.01, 0.05),      # 3% ± 2%
+}
+
+# Legacy targets for backwards compatibility (will be overridden by category targets)
 BIOME_TARGETS = {
-    'plains': (0.25, 0.35),
-    'forest': (0.18, 0.30),    # Needs high moisture, near water
-    'desert': (0.05, 0.15),    # Climate-constrained (hot, dry areas)
-    'rocky_hills': (0.03, 0.07),     # Low moisture hills
-    'grassy_hills': (0.03, 0.07),    # Medium moisture hills  
-    'forest_hills': (0.03, 0.07),    # High moisture hills
-    'snow_tundra': (0.15, 0.28),  # Cold areas are common
-    'mountain': (0.10, 0.10),  # Exactly 10%
+    'plains': (0.32, 0.38),
+    'forest': (0.15, 0.22),
+    'desert': (0.07, 0.13),
+    'rocky_hills': (0.07, 0.10),
+    'grassy_hills': (0.07, 0.10),
+    'forest_hills': (0.07, 0.10),
+    'snow_tundra': (0.04, 0.10),
+    'mountain': (0.13, 0.17),
+}
+
+# Biome category mapping (expanded biome -> category)
+BIOME_CATEGORIES = {
+    # Mountains
+    'rocky_mountains': 'mountains',
+    'snow_mountains': 'mountains',
+    'forest_mountains': 'mountains',
+    'alpine_meadows': 'mountains',
+    'glacier': 'mountains',
+    # Hills
+    'grassy_hills': 'hills',
+    'forest_hills': 'hills',
+    'rocky_hills': 'hills',
+    'snow_hills': 'hills',
+    # Plains
+    'grassland': 'plains',
+    'meadow': 'plains',
+    'steppe': 'plains',
+    'savanna': 'plains',
+    'snow_plains': 'plains',
+    # Forests
+    'temperate_forest': 'forests',
+    'woodland': 'forests',
+    'tropical_forest': 'forests',
+    'rainforest': 'forests',
+    'snow_forest': 'forests',
+    # Deserts
+    'sand_desert': 'deserts',
+    'rock_desert': 'deserts',
+    'badlands': 'deserts',
+    'oasis': 'deserts',
+    # Snow/ice (cold regions)
+    'snow_plains': 'snow',
+    'snow_forest': 'snow',
+    'snow_hills': 'snow',
+    'glacier': 'snow',
+    # Wetlands
+    'swamp': 'wetlands',
+    'marsh': 'wetlands',
+    'mangrove': 'wetlands',
+    # Special
+    'lake': 'water',
+    'ocean': 'water',
 }
 
 # Moisture decay constants (distance-based)
@@ -97,6 +151,44 @@ TEMP_LAKE_COOLING_DECAY = 15.0
 # Terminal logging controls
 _ORIGINAL_PRINT = builtins.print
 _SUPPRESSED_PRINT_COUNT = 0
+
+
+def compute_seed_biome_variance(seed):
+    """
+    Compute seed-based biome distribution variance.
+    Some seeds trend desert-dominant, others snow-dominant, others forest-rich, etc.
+    Returns adjusted target percentages that sum to 1.0 (non-mountain land portion).
+    """
+    rng = np.random.default_rng(seed + 8500)
+    
+    # Select a "dominant" biome category for this seed (10% chance, leaving 90% neutral)
+    categories = ['deserts', 'snow', 'forests', 'plains', 'hills']
+    dominant_category = rng.choice(categories) if rng.random() < 0.10 else None
+    
+    # Base targets (normalized to %non-mountain land, ~85% of total land)
+    targets = BIOME_CATEGORY_TARGETS.copy()
+    
+    if dominant_category:
+        # Boost dominant category, reduce others slightly
+        min_t, max_t = targets[dominant_category]
+        center = (min_t + max_t) / 2
+        boost = center * 0.40  # Boost by up to 40% of range
+        targets[dominant_category] = (
+            min(center + boost, max_t),
+            max_t
+        )
+        
+        # Reduce other categories proportionally
+        other_cats = [c for c in targets if c != dominant_category]
+        reduction_per_cat = boost / len(other_cats) if other_cats else 0
+        for cat in other_cats:
+            min_t, max_t = targets[cat]
+            targets[cat] = (
+                max(min_t - reduction_per_cat * 0.5, min_t),
+                max(max_t - reduction_per_cat, min_t)
+            )
+    
+    return targets
 
 
 def configure_terminal_logging(verbose=False):
@@ -977,8 +1069,9 @@ def compute_expanded_biome_thresholds(temperature, moisture, elevation, slope, r
     return thresholds
 
 
-def assign_expanded_biome(temp, moist, elev, slope, roughness, dist_river, dist_coast, 
-                          landform, thresholds, is_lake_tile, is_river_tile):
+def assign_expanded_biome(temp, moist, elev, slope, roughness, dist_river, dist_coast,
+                          landform, thresholds, is_lake_tile, is_river_tile,
+                          stochastic_value=0.5):
     """
     Assign a specific biome to a single tile based on environmental conditions.
     Uses relative comparisons with dynamic thresholds.
@@ -996,6 +1089,9 @@ def assign_expanded_biome(temp, moist, elev, slope, roughness, dist_river, dist_
     # Coast proximity factor
     near_coast = dist_coast < 8
     very_near_coast = dist_coast < 3
+
+    # Deterministic per-tile stochastic selector (0..1)
+    rv = float(stochastic_value)
     
     # ==========================================================================
     # MOUNTAIN BIOMES (landform == 'mountains')
@@ -1047,16 +1143,16 @@ def assign_expanded_biome(temp, moist, elev, slope, roughness, dist_river, dist_
         if temp > t['temp_warm'] and very_near_coast:
             return 'mangrove'
         # Swamp: near rivers in very wet areas
-        if very_near_river and temp >= t['temp_cool']:
+        if (very_near_river or (near_river and rv < 0.45)) and temp >= t['temp_cool']:
             return 'swamp'
         # Marsh: wet lowlands near water
-        if near_river and temp >= t['temp_cool']:
+        if (near_river or (near_coast and rv < 0.30)) and temp >= t['temp_cool']:
             return 'marsh'
     
     # Desert biomes (hot and dry)
     if temp > t['temp_warm'] and moist < t['moist_dry']:
         # Oasis: desert with river nearby
-        if near_river:
+        if near_river and (moist > t['moist_arid'] or rv < 0.22):
             return 'oasis'
         # Badlands: dry, rough terrain
         if roughness > t['rough_moderate']:
@@ -1070,7 +1166,7 @@ def assign_expanded_biome(temp, moist, elev, slope, roughness, dist_river, dist_
     # Forest biomes (sufficient moisture)
     if moist > t['moist_wet']:
         # Rainforest: hot, extremely wet
-        if temp > t['temp_warm'] and moist > t['moist_very_wet']:
+        if temp > t['temp_warm'] and moist > t['moist_very_wet'] and rv < 0.82:
             return 'rainforest'
         # Tropical forest: warm, wet
         if temp > t['temp_warm']:
@@ -1079,25 +1175,31 @@ def assign_expanded_biome(temp, moist, elev, slope, roughness, dist_river, dist_
         if temp >= t['temp_cool']:
             return 'temperate_forest'
     
-    # Woodland (moderate moisture with some trees)
+    # Plains/woodland biomes (remaining cases)
     if moist > t['moist_moderate']:
-        return 'woodland'
-    
-    # Plains biomes (remaining cases)
-    # Steppe: dry plains
-    if moist < t['moist_moderate']:
+        # Meadow: river-adjacent fertile plains
+        if near_river and temp >= t['temp_cool'] and temp <= t['temp_warm'] and rv < 0.55:
+            return 'meadow'
+        # Savanna: warm moderate-moisture plains
+        if temp > t['temp_warm'] and moist < t['moist_wet'] and rv < 0.62:
+            return 'savanna'
+        # Woodland remains common but no longer crowding out all other moderate-moisture plains
+        if rv < 0.58:
+            return 'woodland'
+        return 'grassland'
+
+    # Drier plains
+    if moist < t['moist_dry']:
         return 'steppe'
-    
-    # Savanna: warm with moderate moisture
-    if temp > t['temp_warm']:
+
+    # Transitional dry-to-moderate band
+    if temp > t['temp_warm'] and rv < 0.42:
         return 'savanna'
-    
-    # Meadow: near rivers with decent moisture
-    if near_river and moist >= t['moist_moderate']:
+    if near_river and rv < 0.35:
         return 'meadow'
-    
-    # Grassland: default plains
-    return 'grassland'
+    if rv < 0.55:
+        return 'grassland'
+    return 'steppe'
 
 
 def assign_biomes_expanded(width, height, seed, is_land, is_mountain, is_lake, is_river,
@@ -1134,7 +1236,7 @@ def assign_biomes_expanded(width, height, seed, is_land, is_mountain, is_lake, i
             if not land_mask[y, x]:
                 biomes[y, x] = 'ocean'
                 continue
-            
+
             biome = assign_expanded_biome(
                 temp=temperature[y, x],
                 moist=moisture[y, x],
@@ -1146,7 +1248,8 @@ def assign_biomes_expanded(width, height, seed, is_land, is_mountain, is_lake, i
                 landform=landforms[y, x],
                 thresholds=thresholds,
                 is_lake_tile=is_lake[y, x],
-                is_river_tile=is_river[y, x]
+                is_river_tile=is_river[y, x],
+                stochastic_value=rng.random()
             )
             biomes[y, x] = biome
     
@@ -1167,6 +1270,7 @@ def smooth_expanded_biomes(biomes, land_mask, temperature, moisture, elevation,
     """
     height, width = biomes.shape
     rng = np.random.default_rng(seed + 7100)
+    rare_sensitive_biomes = {'oasis', 'mangrove', 'rainforest', 'meadow', 'savanna', 'grassland'}
     
     for _ in range(num_passes):
         changes = []
@@ -1194,7 +1298,8 @@ def smooth_expanded_biomes(biomes, land_mask, temperature, moisture, elevation,
                     continue
                 
                 # Check if current biome is isolated (no matching neighbors)
-                if current not in neighbor_counts or neighbor_counts[current] < 2:
+                keep_threshold = 1 if current in rare_sensitive_biomes else 2
+                if current not in neighbor_counts or neighbor_counts[current] < keep_threshold:
                     # Find most common valid neighbor
                     sorted_neighbors = sorted(neighbor_counts.items(), key=lambda x: x[1], reverse=True)
                     
@@ -1250,6 +1355,295 @@ def is_biome_compatible(biome, landform, temp, moist, thresholds):
     
     # Plains biomes are generally compatible with plains landform
     return True
+
+
+def enforce_biome_categories(biomes, land_mask, temperature, moisture, elevation, 
+                              dist_river, dist_lake, dist_coast, seed):
+    """
+    Enforce biome distribution by category (mountains, hills, plains, forests, deserts, snow, wetlands).
+    Uses seed-based variance to make some seeds desert-dominant, others snow-dominant, etc.
+    
+    Converts individual biome tiles to reach category target percentages while respecting climate.
+    Prioritizes conversions at cluster edges (adjacent to deficit category) for natural appearance.
+    """
+    height, width = biomes.shape
+    rng = np.random.default_rng(seed + 8600)
+    
+    # Get seed-based targets
+    category_targets = compute_seed_biome_variance(seed)
+    
+    # Count current biomes by category
+    category_counts = {cat: 0 for cat in BIOME_CATEGORY_TARGETS.keys()}
+    category_tiles = {cat: [] for cat in BIOME_CATEGORY_TARGETS.keys()}
+    
+    total_land = 0
+    for y in range(height):
+        for x in range(width):
+            if not land_mask[y, x]:
+                continue
+            total_land += 1
+            biome = biomes[y, x]
+            # Map expanded biome to category
+            cat = BIOME_CATEGORIES.get(biome, None)
+            if cat and cat != 'water':
+                category_counts[cat] += 1
+                category_tiles[cat].append((y, x))
+    
+    if total_land == 0:
+        return biomes
+    
+    # Compute target counts for each category
+    target_tile_counts = {}
+    for cat, (min_pct, max_pct) in category_targets.items():
+        target_tile_counts[cat] = {
+            'min': int(total_land * min_pct),
+            'max': int(total_land * max_pct)
+        }
+    
+    # Iteratively adjust biomes to meet category targets
+    max_iterations = 150
+    for iteration in range(max_iterations):
+        changes_made = False
+        
+        # Find categories that are over/under target
+        deficits = {}  # Categories that need more tiles
+        surpluses = {}  # Categories that have too many
+        
+        for cat in category_targets.keys():
+            current = category_counts[cat]
+            targets = target_tile_counts[cat]
+            if current < targets['min']:
+                deficits[cat] = targets['min'] - current
+            elif current > targets['max']:
+                surpluses[cat] = current - targets['max']
+        
+        if not deficits and not surpluses:
+            break
+        
+        # Convert surplus category tiles to deficit categories
+        for surplus_cat, surplus_amt in surpluses.items():
+            if surplus_amt <= 0:
+                continue
+            
+            # Get deficit categories sorted by priority
+            deficit_cats = sorted(deficits.items(), key=lambda x: -x[1])
+            
+            for deficit_cat, deficit_amt in deficit_cats:
+                if surplus_amt <= 0 or deficit_amt <= 0:
+                    continue
+                
+                convert_count = min(surplus_amt, deficit_amt, 40)
+                
+                # Find tiles at the edge of surplus category clusters (adjacent to deficit category)
+                edge_candidates = []
+                
+                for y, x in category_tiles[surplus_cat]:
+                    # Check if this tile is adjacent to deficit category
+                    is_edge = False
+                    neighbor_deficit_count = 0
+                    
+                    for dy, dx in [(-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (-1, 1), (1, -1), (1, 1)]:
+                        ny, nx = y + dy, x + dx
+                        if 0 <= ny < height and 0 <= nx < width:
+                            if land_mask[ny, nx]:
+                                neighbor_cat = BIOME_CATEGORIES.get(biomes[ny, nx], None)
+                                if neighbor_cat == deficit_cat:
+                                    is_edge = True
+                                    neighbor_deficit_count += 1
+                    
+                    if not is_edge:
+                        continue
+                    
+                    temp = temperature[y, x]
+                    moist = moisture[y, x]
+                    elev = elevation[y, x]
+                    
+                    # Score based on climate compatibility with deficit category
+                    climate_score = 0.3
+                    if deficit_cat == 'deserts' and temp > 0.35 and moist < 0.45:
+                        climate_score = 0.85
+                    elif deficit_cat == 'forests' and moist > 0.45:
+                        climate_score = 0.80
+                    elif deficit_cat == 'plains':
+                        climate_score = 0.70
+                    elif deficit_cat == 'snow' and temp < 0.35:
+                        climate_score = 0.85
+                    elif deficit_cat == 'wetlands' and moist > 0.70:
+                        climate_score = 0.80
+                    elif deficit_cat == 'hills' and elev > 0.35:
+                        climate_score = 0.75
+                    elif deficit_cat == 'mountains' and elev > 0.60:
+                        climate_score = 0.75
+                    
+                    # Edge score: more neighbors of deficit category = higher priority
+                    edge_score = neighbor_deficit_count / 8.0
+                    
+                    # Combined score: prefer edge tiles that are climatically suitable
+                    total_score = edge_score * 0.6 + climate_score * 0.4
+                    edge_candidates.append((y, x, total_score))
+                
+                # Convert top edge candidates (cluster growth)
+                edge_candidates.sort(key=lambda x: -x[2])
+                for i in range(min(convert_count, len(edge_candidates))):
+                    y, x = edge_candidates[i][:2]
+                    old_cat = BIOME_CATEGORIES.get(biomes[y, x], None)
+                    
+                    # Pick a random biome from the deficit category
+                    deficit_biomes = [b for b, c in BIOME_CATEGORIES.items() 
+                                     if c == deficit_cat and c != 'water']
+                    if deficit_biomes:
+                        new_biome = rng.choice(deficit_biomes)
+                        biomes[y, x] = new_biome
+                        
+                        # Update counts
+                        if old_cat:
+                            category_counts[old_cat] -= 1
+                            category_tiles[old_cat].remove((y, x))
+                        category_counts[deficit_cat] += 1
+                        category_tiles[deficit_cat].append((y, x))
+                        
+                        surplus_amt -= 1
+                        deficits[deficit_cat] = max(0, deficit_amt - 1)
+                        changes_made = True
+        
+        if not changes_made:
+            break
+    
+    # Final pass: clump similar biomes together for natural clustering
+    biomes = clump_biome_clusters(biomes, land_mask, seed)
+    
+    # Extra aggressive pass: merge tiny biome patches (≤5 tiles) into neighbors
+    biomes = merge_tiny_biome_patches(biomes, land_mask, min_patch_size=5)
+    
+    return biomes
+
+
+def clump_biome_clusters(biomes, land_mask, seed):
+    """
+    Final clustering pass: encourages isolated tiles to join nearby clusters of similar biomes.
+    This reduces "glitter" scattered appearance while maintaining overall distribution.
+    """
+    height, width = biomes.shape
+    rng = np.random.default_rng(seed + 8750)
+    
+    # Make 5 passes to allow cascading effects
+    for pass_num in range(5):
+        changes = 0
+        
+        for y in range(height):
+            for x in range(width):
+                if not land_mask[y, x]:
+                    continue
+                
+                current_biome = biomes[y, x]
+                current_cat = BIOME_CATEGORIES.get(current_biome, None)
+                
+                if current_cat == 'water':
+                    continue
+                
+                # Count biome-specific neighbors (not just categories)
+                neighbor_biomes = {}
+                same_cat_count = 0
+                total_land_neighbors = 0
+                
+                for dy, dx in [(-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (-1, 1), (1, -1), (1, 1)]:
+                    ny, nx = y + dy, x + dx
+                    if 0 <= ny < height and 0 <= nx < width:
+                        if land_mask[ny, nx]:
+                            nb = biomes[ny, nx]
+                            ncat = BIOME_CATEGORIES.get(nb, None)
+                            if ncat and ncat != 'water':
+                                neighbor_biomes[nb] = neighbor_biomes.get(nb, 0) + 1
+                                if ncat == current_cat:
+                                    same_cat_count += 1
+                                total_land_neighbors += 1
+                
+                if total_land_neighbors == 0 or neighbor_biomes is None:
+                    continue
+                
+                # If this tile is isolated (few or no neighbors of same category)
+                # and surrounded by mostly one other biome, consider switching to that biome
+                if same_cat_count <= 4 and total_land_neighbors >= 5:
+                    # Find most common neighbor biome
+                    most_common_neighbor = max(neighbor_biomes, key=neighbor_biomes.get)
+                    common_count = neighbor_biomes[most_common_neighbor]
+                    
+                    # Only switch if neighbor is dominant (≥35% of neighbors)
+                    if common_count >= total_land_neighbors * 0.35:
+                        neighbor_cat = BIOME_CATEGORIES.get(most_common_neighbor, None)
+                        
+                        # Don't merge across category boundaries too aggressively
+                        # Only merge within mountains/hills/plains/forests, etc., not between them
+                        if neighbor_cat == current_cat or (
+                            # Allow some flexible adjacency: hills can border plains, forests can border plains
+                            (current_cat in ['hills', 'mountains'] and neighbor_cat in ['hills', 'plains']) or
+                            (current_cat == 'plains' and neighbor_cat in ['forests', 'hills', 'plains']) or
+                            (current_cat == 'forests' and neighbor_cat in ['forests', 'plains'])
+                        ):
+                            # Adopt the neighbor biome (not just category)
+                            biomes[y, x] = most_common_neighbor
+                            changes += 1
+        
+        if changes == 0:
+            break
+    
+    return biomes
+
+
+def merge_tiny_biome_patches(biomes, land_mask, min_patch_size=5):
+    """
+    Merge tiny, isolated biome patches into their neighboring larger clusters.
+    This aggressively consolidates biome regions to reduce scattered appearance.
+    """
+    height, width = biomes.shape
+    
+    # Identify and merge tiny patches
+    from scipy import ndimage
+    
+    # Process each biome type
+    biome_types = set()
+    for y in range(height):
+        for x in range(width):
+            if land_mask[y, x]:
+                biome_types.add(biomes[y, x])
+    
+    for biome_type in biome_types:
+        if biome_type in ['ocean', 'lake', 'water']:
+            continue
+        
+        # Create mask for this biome
+        biome_mask = (biomes == biome_type) & land_mask
+        
+        # Label connected components of this biome
+        labeled, num_features = ndimage.label(biome_mask)
+        
+        # Find tiny patches (≤ min_patch_size)
+        for comp_id in range(1, num_features + 1):
+            patch_mask = (labeled == comp_id)
+            patch_size = patch_mask.sum()
+            
+            if patch_size <= min_patch_size:
+                # Find all tiles in this patch
+                patch_tiles = np.argwhere(patch_mask)
+                
+                # For each tile, find the most common neighboring biome and switch to it
+                for py, px in patch_tiles:
+                    neighbor_biomes = {}
+                    
+                    for dy, dx in [(-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (-1, 1), (1, -1), (1, 1)]:
+                        ny, nx = py + dy, px + dx
+                        if 0 <= ny < height and 0 <= nx < width:
+                            if land_mask[ny, nx] and biomes[ny, nx] != biome_type:
+                                nb = biomes[ny, nx]
+                                neighbor_biomes[nb] = neighbor_biomes.get(nb, 0) + 1
+                    
+                    if neighbor_biomes:
+                        # Switch to the most common neighbor biome
+                        new_biome = max(neighbor_biomes, key=neighbor_biomes.get)
+                        biomes[py, px] = new_biome
+    
+    return biomes
+
 
 
 # =============================================================================
@@ -6418,6 +6812,11 @@ def generate_world(seed):
         dist_river, dist_coast, is_island
     )
     
+    # Enforce category-level distribution targets (mountains, hills, plains, forests, etc.)
+    land_mask = is_land | is_island
+    biomes = enforce_biome_categories(biomes, land_mask, temperature, moisture, elevation,
+                                       dist_river, dist_lake, dist_coast, seed)
+    
     # Count biome distribution
     land_mask = is_land | is_island
     biome_counts = {}
@@ -6550,9 +6949,8 @@ def generate_world(seed):
         print(f"\n  {group_name}: {group_total} tiles ({group_pct:.1f}%)")
         for biome in group_biomes:
             count = biome_counts.get(biome, 0)
-            if count > 0:
-                pct = count / effective_land_count * 100
-                print(f"    - {biome:20s}: {count:5d} ({pct:5.2f}%)")
+            pct = count / effective_land_count * 100 if effective_land_count > 0 else 0
+            print(f"    - {biome:20s}: {count:5d} ({pct:5.2f}%)")
     
     # Biome cluster statistics
     print(f"\nBiome Cluster Statistics (top 10 by count):")
@@ -6633,7 +7031,9 @@ def generate_world(seed):
         print(f"    - Peat deposits: {high_peat}, Fossil fuel: {high_fossil}")
     
     # Save to CSV
-    filename = f"world_seed_{seed}.csv"
+    output_dir = os.path.join("map_layers", str(seed))
+    os.makedirs(output_dir, exist_ok=True)
+    filename = os.path.join(output_dir, f"world_seed_{seed}.csv")
     df.to_csv(filename, index=False)
     print(f"\nWorld saved to: {filename}")
     
@@ -6786,7 +7186,9 @@ def visualize_world(df, seed, save_image=True):
     plt.tight_layout()
     
     if save_image:
-        plt.savefig(f'world_seed_{seed}.png', dpi=150, bbox_inches='tight')
+        output_dir = os.path.join("map_layers", str(seed))
+        os.makedirs(output_dir, exist_ok=True)
+        plt.savefig(os.path.join(output_dir, f'world_seed_{seed}.png'), dpi=150, bbox_inches='tight')
         print(f"Visualization saved to: world_seed_{seed}.png")
     
     plt.close(fig)
@@ -6836,7 +7238,9 @@ def generate_atlas_map(df, seed, biome_colors, save_image=True):
     plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
     
     if save_image:
-        plt.savefig(f'world_seed_{seed}_atlas.png', dpi=200, bbox_inches='tight', pad_inches=0)
+        output_dir = os.path.join("map_layers", str(seed))
+        os.makedirs(output_dir, exist_ok=True)
+        plt.savefig(os.path.join(output_dir, f'world_seed_{seed}_atlas.png'), dpi=200, bbox_inches='tight', pad_inches=0)
         print(f"Atlas map saved to: world_seed_{seed}_atlas.png")
     
     plt.close(fig)
@@ -6978,7 +7382,9 @@ def visualize_resources(df, seed, save_image=True):
     plt.tight_layout()
     
     if save_image:
-        plt.savefig(f'world_seed_{seed}_resources.png', dpi=150, bbox_inches='tight')
+        output_dir = os.path.join("map_layers", str(seed))
+        os.makedirs(output_dir, exist_ok=True)
+        plt.savefig(os.path.join(output_dir, f'world_seed_{seed}_resources.png'), dpi=150, bbox_inches='tight')
         print(f"Resource map saved to: world_seed_{seed}_resources.png")
     
     plt.close(fig)
@@ -7002,9 +7408,8 @@ if __name__ == "__main__":
         # Generate world
         df = generate_world(seed)
 
-        # Auto-generate visualizations
-        visualize_world(df, seed)
-        visualize_resources(df, seed)
+        # Auto-generate atlas map (without full visualization map)
+        generate_atlas_map(df, seed, EXPANDED_BIOME_COLORS.copy(), save_image=True)
 
         print("\nWorld generation complete!")
     finally:
