@@ -957,58 +957,58 @@ def classify_landforms(elevation, slope, is_land, is_mountain):
 # =============================================================================
 EXPANDED_BIOME_COLORS = {
     # Ocean
-    'ocean': '#1a5276',
+    'ocean': '#1f4e73',
     
     # Plains biomes
-    'grassland': '#90c965',
-    'meadow': '#7dcea0',
-    'steppe': '#c4b896',
-    'savanna': '#d4b86a',
+    'grassland': '#8fcf5c',
+    'meadow': '#a8d96f',
+    'steppe': '#bfa062',
+    'savanna': '#cdbb55',
     
     # Forest biomes
-    'temperate_forest': '#228b22',
-    'woodland': '#6b8e23',
-    'tropical_forest': '#006400',
-    'rainforest': '#004d00',
+    'temperate_forest': '#3f8f3a',
+    'woodland': '#6e9f4a',
+    'tropical_forest': '#2e7d32',
+    'rainforest': '#1b5e20',
     
     # Desert biomes
-    'sand_desert': '#f4d03f',
-    'rock_desert': '#a0522d',
-    'badlands': '#cd853f',
-    'oasis': '#32cd32',
+    'sand_desert': '#efd27a',
+    'rock_desert': '#b68c5a',
+    'badlands': '#9e5f3f',
+    'oasis': '#4caf50',
     
     # Snow biomes
-    'snow_plains': '#e8f4f8',
-    'snow_forest': '#a8d8ea',
-    'snow_hills': '#b8c9d4',
-    'glacier': '#e0ffff',
+    'snow_plains': '#f4f8ff',
+    'snow_forest': '#cddfec',
+    'snow_hills': '#dbe3ef',
+    'glacier': '#e6f7ff',
     
     # Hill biomes
-    'grassy_hills': '#5c8a4d',
-    'forest_hills': '#2d5a3f',
-    'rocky_hills': '#6b5344',
+    'grassy_hills': '#7fae57',
+    'forest_hills': '#557f45',
+    'rocky_hills': '#8a8175',
     
     # Mountain biomes
-    'rocky_mountains': '#5d6d7e',
-    'snow_mountains': '#d5d8dc',
-    'forest_mountains': '#3d5c4f',
-    'alpine_meadows': '#8fbc8f',
+    'rocky_mountains': '#7a7f87',
+    'snow_mountains': '#f0f4f8',
+    'forest_mountains': '#5f7565',
+    'alpine_meadows': '#a9c97f',
     
     # Wetland biomes
-    'swamp': '#4a5d23',
-    'marsh': '#6b7b3a',
-    'mangrove': '#3d5e3a',
+    'swamp': '#4f6530',
+    'marsh': '#6f8c4a',
+    'mangrove': '#3e6f57',
     
     # Water features
-    'lake': '#3498db',
-    'river': '#1e90ff',  # Dodger blue
+    'lake': '#3f88c5',
+    'river': '#2d7abf',
     
     # Legacy biomes (for backward compatibility)
-    'plains': '#90c965',
-    'forest': '#228b22',
-    'desert': '#f4d03f',
-    'snow_tundra': '#e8f4f8',
-    'mountain': '#5d6d7e',
+    'plains': '#8fcf5c',
+    'forest': '#3f8f3a',
+    'desert': '#efd27a',
+    'snow_tundra': '#f4f8ff',
+    'mountain': '#7a7f87',
 }
 
 
