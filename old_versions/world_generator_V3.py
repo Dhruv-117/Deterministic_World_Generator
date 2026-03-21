@@ -2,7 +2,7 @@
 Deterministic Seed-Based Procedural Fantasy World Generator
 ============================================================
 A fully reproducible world generation system using seeded random generators.
-Generates a 300x300 grid with tectonics, climate, lakes, and biomes.
+Generates a 200x200 grid with tectonics, climate, lakes, and biomes.
 
 """
 
@@ -37,8 +37,8 @@ except ImportError:
 # =============================================================================
 # CONSTANTS
 # =============================================================================
-WORLD_WIDTH = 300
-WORLD_HEIGHT = 300
+WORLD_WIDTH = 200
+WORLD_HEIGHT = 200
 TOTAL_TILES = WORLD_WIDTH * WORLD_HEIGHT  # 40,000
 
 REGION_SIZE = 8  # 8x8 tile regions
@@ -107,11 +107,13 @@ BIOME_CATEGORIES = {
     'meadow': 'plains',
     'steppe': 'plains',
     'savanna': 'plains',
+    'snow_plains': 'plains',
     # Forests
     'temperate_forest': 'forests',
     'woodland': 'forests',
     'tropical_forest': 'forests',
     'rainforest': 'forests',
+    'snow_forest': 'forests',
     # Deserts
     'sand_desert': 'deserts',
     'rock_desert': 'deserts',
@@ -130,23 +132,6 @@ BIOME_CATEGORIES = {
     'lake': 'water',
     'ocean': 'water',
 }
-
-EXPANDED_REQUIRED_BIOMES = [
-    # Plains
-    'grassland', 'meadow', 'steppe', 'savanna',
-    # Forests
-    'temperate_forest', 'woodland', 'tropical_forest', 'rainforest',
-    # Deserts
-    'sand_desert', 'rock_desert', 'badlands', 'oasis',
-    # Snow / cold
-    'snow_plains', 'snow_forest', 'snow_hills',
-    # Hills
-    'grassy_hills', 'forest_hills', 'rocky_hills',
-    # Mountains
-    'rocky_mountains', 'snow_mountains', 'forest_mountains', 'alpine_meadows', 'glacier',
-    # Wetlands
-    'swamp', 'marsh', 'mangrove',
-]
 
 # Moisture decay constants (distance-based)
 MOISTURE_OCEAN_DECAY = 30.0  # exp(-dist/30) for ocean (reduced from 40)
@@ -282,7 +267,7 @@ HEADWATER_HIGHLAND_ELEV = 0.45         # Highland/hill headwater threshold (lowe
 HEADWATER_SPRING_ELEV_MAX = 0.60       # Spring sources below this elevation
 
 # Upstream extension parameters
-UPSTREAM_MAX_LENGTH = 320              # Max tiles to trace upstream (supports long trunk systems)
+UPSTREAM_MAX_LENGTH = 200              # Max tiles to trace upstream (increased for longer rivers)
 UPSTREAM_MIN_SLOPE = 0.0003            # Min slope to continue upstream (very permissive)
 UPSTREAM_STOP_AT_RIDGE = True          # Stop when reaching ridge lines
 
@@ -290,20 +275,10 @@ UPSTREAM_STOP_AT_RIDGE = True          # Stop when reaching ridge lines
 MIN_RIVER_SYSTEM_LENGTH = 6            # Min length for standalone river systems (lowered)
 TRIBUTARY_MERGE_DISTANCE = 5           # Max distance to merge into larger river
 TARGET_MAX_RIVERS = 35                 # Target number of main river systems (increased)
-MIN_HEADWATER_SPACING = 9              # Min tiles between river headwaters
-TRIBUTARY_SPACING_FACTOR = 0.55        # Tributary spacing = MIN_HEADWATER_SPACING * this factor
+MIN_HEADWATER_SPACING = 10             # Min tiles between river headwaters (reduced)
+TRIBUTARY_SPACING_FACTOR = 0.7         # Tributary spacing = MIN_HEADWATER_SPACING * this factor
 MAX_TRIBUTARIES_PER_RIVER = 8          # Maximum tributaries per main river system
 INLAND_RIVER_CHANCE = 0.50             # Chance to add additional inland rivers (50%)
-INTERIOR_RIVER_DIST_THRESHOLD = 20     # Distance from ocean considered "continental interior"
-MIN_INTERIOR_RIVER_COVERAGE = 0.015    # Min river tile coverage on interior land (1.5%)
-MAX_INTERIOR_RIVER_ADDITIONS = 8       # Cap extra interior systems to avoid messy networks
-INTERIOR_RIVER_MIN_NEW_TILES = 8       # Candidate must add this many new interior river tiles
-
-# Long continental trunk-river controls
-LONG_RIVER_FORCE_LENGTH = 110          # Reserve rivers at/above this length as trunk candidates
-LONG_RIVER_FORCE_DIST_OCEAN = 12       # Trunk headwaters should begin inland
-LONG_RIVER_MIN_TRUNKS = 3              # Always try to keep at least this many long trunks
-LONG_RIVER_MAX_TRUNKS = 6              # Hard cap to avoid over-dominating the network
 
 # Basin carving parameters
 BASIN_CARVE_AMOUNT = 0.008             # Base carving depth per tile
@@ -317,44 +292,19 @@ RIVER_WIDTH_LOG_SCALE = 0.4            # Logarithmic scaling factor
 RIVER_MAX_WIDTH = 3.0                  # Maximum river width in tiles
 
 # River climate effects - distance-based moisture boost
-RIVER_MOISTURE_DIST_0_1 = 0.20         # Strong moisture boost (distance 0-1)
-RIVER_MOISTURE_DIST_2_3 = 0.075        # Moderate boost (distance 2-3)
-RIVER_MOISTURE_DIST_4_6 = 0.026        # Weak boost (distance 4-6)
-RIVER_MOISTURE_DIST_7_8 = 0.006        # Minimal boost (distance 7-8)
+RIVER_MOISTURE_DIST_0_1 = 0.35         # Strong moisture boost (distance 0-1)
+RIVER_MOISTURE_DIST_2_3 = 0.20         # Moderate boost (distance 2-3)
+RIVER_MOISTURE_DIST_4_6 = 0.10         # Weak boost (distance 4-6)
+RIVER_MOISTURE_DIST_7_8 = 0.03         # Minimal boost (distance 7-8)
 RIVER_TEMP_REDUCTION = 0.04            # Temperature reduction near rivers
-RIVER_INTENSITY_MOISTURE_BLEND = 0.82  # Blend factor for intensity-scaled river moisture emission
-
-# Guided coast routing (prevents ruler-straight river mouths in flat coastal zones)
-RIVER_COAST_GUIDE_MAX_AWAY = 1.8        # Max allowed move away from coast during fallback routing
-RIVER_COAST_STRAIGHT_PENALTY = 0.16     # Penalty for repeating same direction in fallback routing
-RIVER_COAST_STRAIGHT_PENALTY_MAX = 0.48 # Cap on straight-run penalty
-RIVER_COAST_JITTER = 0.06               # Small deterministic jitter to break tie-lines
-RIVER_MEANDER_STRAIGHT_RUN_TRIGGER = 5  # Start meander checks after this many straight steps
-RIVER_MEANDER_COAST_DIST = 28.0         # Only enforce meanders near coast/plains
-RIVER_MEANDER_MAX_DROP = 0.015          # Only meander when downhill slope is gentle
-RIVER_MEANDER_TRIGGER_CHANCE = 0.68     # Deterministic trigger chance for meander injection
-
-# Dynamic river moisture-intensity model
-RIVER_SOURCE_INTENSITY_MIN = 0.30
-RIVER_SOURCE_INTENSITY_MAX = 0.82
-RIVER_TRIBUTARY_INTENSITY_GAIN = 0.09
-RIVER_INTENSITY_TEMP_SENSITIVITY = 0.72
-RIVER_INTENSITY_LAKE_GAIN = 0.22
-RIVER_INTENSITY_EVAPORATION_BASE = 0.95
-RIVER_INTENSITY_EVAPORATION_TEMP = 0.17
-RIVER_INTENSITY_EVAPORATION_LAKE_RECOVERY = 0.06
 
 # Enhanced biome effects near rivers by type
-MAJOR_RIVER_MOISTURE_BOOST = 0.05      # Extra moisture for major river proximity
-MAJOR_RIVER_INFLUENCE_DIST = 8         # Influence distance for major rivers
+MAJOR_RIVER_MOISTURE_BOOST = 0.15      # Extra moisture for major river proximity
+MAJOR_RIVER_INFLUENCE_DIST = 12        # Influence distance for major rivers
 
 # Validation thresholds
 RIVER_MIN_LENGTH = 5                   # Minimum tiles for a valid river segment (increased)
 
-D8_DIRECTIONS = [
-    (-1, 0), (1, 0), (0, -1), (0, 1),
-    (-1, -1), (-1, 1), (1, -1), (1, 1)
-]
 
 # =============================================================================
 # SEEDED NOISE GENERATION
@@ -667,57 +617,28 @@ def flood_fill_ocean_validation(is_land, width, height):
 def identify_mountains(heightmap, is_land, convergent_boundaries, target_mountain_ratio=0.10):
     """
     Identify mountain tiles.
-    Mountains must match the configured target ratio of land tiles.
-    Mountains are tectonically favored near convergent boundaries, but
-    continental interiors can also host highland orogenic ranges.
+    Mountains must be exactly 10% of land tiles.
+    Mountains form along convergent boundaries.
     """
     height, width = heightmap.shape
     land_count = is_land.sum()
     target_mountain_count = int(land_count * target_mountain_ratio)
-
-    # Base tectonic score: decays with distance from convergent boundaries.
-    mountain_score = np.zeros((height, width), dtype=np.float32)
+    
+    mountain_score = np.zeros((height, width))
+    
     boundary_distance = ndimage.distance_transform_edt(~convergent_boundaries)
-    if convergent_boundaries.any():
-        land_boundary = boundary_distance[is_land]
-        boundary_decay = max(4.0, float(np.percentile(land_boundary, 40)))
-        boundary_score = np.exp(-boundary_distance / boundary_decay)
-    else:
-        boundary_score = np.zeros((height, width), dtype=np.float32)
-
-    # Continental interior uplift signal:
-    # inland highlands with local relief can still become mountain chains.
-    dist_ocean = ndimage.distance_transform_edt(is_land)
-    land_ocean = dist_ocean[is_land]
-    ocean_p80 = max(8.0, float(np.percentile(land_ocean, 80))) if len(land_ocean) > 0 else 20.0
-    inland_norm = np.clip(dist_ocean / ocean_p80, 0.0, 1.0)
-
-    land_elev = heightmap[is_land]
-    elev_p55 = float(np.percentile(land_elev, 55)) if len(land_elev) > 0 else 0.45
-    elev_p85 = float(np.percentile(land_elev, 85)) if len(land_elev) > 0 else 0.75
-    elev_span = max(1e-5, elev_p85 - elev_p55)
-    highland_norm = np.clip((heightmap - elev_p55) / elev_span, 0.0, 1.0)
-
-    smoothed = ndimage.gaussian_filter(heightmap, sigma=3)
-    local_relief = np.abs(heightmap - smoothed)
-    relief_p90 = float(np.percentile(local_relief[is_land], 90)) if is_land.any() else 0.08
-    relief_norm = np.clip(local_relief / max(1e-5, relief_p90), 0.0, 1.0)
-
-    interior_orogeny = inland_norm * highland_norm * (0.55 + 0.45 * relief_norm)
-
-    # Blend tectonic + terrain signals.
-    if convergent_boundaries.any():
-        mountain_score = heightmap * 0.36 + boundary_score * 0.42 + interior_orogeny * 0.22
-    else:
-        mountain_score = heightmap * 0.42 + interior_orogeny * 0.58
-    mountain_score[~is_land] = -1.0
-
+    max_dist = boundary_distance.max() if boundary_distance.max() > 0 else 1
+    boundary_score = 1.0 - (boundary_distance / max_dist)
+    
+    mountain_score = heightmap * 0.4 + boundary_score * 0.6
+    mountain_score[~is_land] = -1
+    
     flat_scores = mountain_score.flatten()
     flat_indices = np.argsort(flat_scores)[::-1]
-
+    
     is_mountain = np.zeros((height, width), dtype=bool)
     mountain_count = 0
-
+    
     for idx in flat_indices:
         if mountain_count >= target_mountain_count:
             break
@@ -725,39 +646,9 @@ def identify_mountains(heightmap, is_land, convergent_boundaries, target_mountai
         if is_land[y, x] and flat_scores[idx] >= 0:
             is_mountain[y, x] = True
             mountain_count += 1
-
-    # Enforce minimum inland mountain share so middle-continental ranges appear.
-    inland_mountain_zone = is_land & (dist_ocean >= max(16.0, ocean_p80 * 0.45))
-    inland_land_share = inland_mountain_zone.sum() / max(1, land_count)
-    target_inland_share = np.clip(0.16 + 0.20 * inland_land_share, 0.15, 0.28)
-    target_inland_mountains = int(target_mountain_count * target_inland_share)
-    current_inland_mountains = int((is_mountain & inland_mountain_zone).sum())
-
-    if current_inland_mountains < target_inland_mountains:
-        need = target_inland_mountains - current_inland_mountains
-
-        inland_candidates = np.argwhere(inland_mountain_zone & ~is_mountain)
-        if len(inland_candidates) > 0:
-            inland_rank = sorted(
-                [(float(mountain_score[y, x]), int(y), int(x)) for y, x in inland_candidates],
-                reverse=True
-            )
-            promote = inland_rank[:need]
-            for _, y, x in promote:
-                is_mountain[y, x] = True
-
-            # Keep target count exact by demoting weakest non-inland mountains first.
-            overflow = int(is_mountain.sum()) - target_mountain_count
-            if overflow > 0:
-                non_inland_mtn = np.argwhere(is_mountain & ~inland_mountain_zone)
-                demote_pool = sorted(
-                    [(float(mountain_score[y, x]), int(y), int(x)) for y, x in non_inland_mtn]
-                )
-                for _, y, x in demote_pool[:overflow]:
-                    is_mountain[y, x] = False
-
+    
     is_mountain = ensure_mountain_chains(is_mountain, heightmap, is_land, target_mountain_count)
-
+    
     return is_mountain
 
 
@@ -932,57 +823,6 @@ def compute_distance_from_lakes(is_lake, width, height):
     distance = ndimage.distance_transform_edt(lake_mask)
     return distance
 
-def compute_flow_direction(elevation, width, height):
-    flow_dir = -np.ones((height, width), dtype=np.int32)
-
-    for y in range(height):
-        for x in range(width):
-            min_elev = elevation[y, x]
-            best_dir = -1
-
-            for i, (dy, dx) in enumerate(D8_DIRECTIONS):
-                ny, nx = y + dy, x + dx
-                if 0 <= ny < height and 0 <= nx < width:
-                    if elevation[ny, nx] < min_elev:
-                        min_elev = elevation[ny, nx]
-                        best_dir = i
-
-            flow_dir[y, x] = best_dir
-
-    return flow_dir
-
-def compute_flow_accumulation(flow_dir, width, height):
-    accumulation = np.ones((height, width), dtype=np.float32)
-
-    # process in descending elevation order for stability
-    indices = [(y, x) for y in range(height) for x in range(width)]
-
-    for y, x in indices:
-        dir_idx = flow_dir[y, x]
-        if dir_idx >= 0:
-            dy, dx = D8_DIRECTIONS[dir_idx]
-            ny, nx = y + dy, x + dx
-            if 0 <= ny < height and 0 <= nx < width:
-                accumulation[ny, nx] += accumulation[y, x]
-
-    return accumulation
-
-def generate_rivers(elevation, temperature, moisture, is_land, width, height):
-    flow_dir = compute_flow_direction(elevation, width, height)
-    flow_acc = compute_flow_accumulation(flow_dir, width, height)
-
-    # Snowmelt boost (your system expects this)
-    snow_mask = temperature < SNOWMELT_TEMP_THRESHOLD
-    flow_acc[snow_mask] *= SNOWMELT_FLOW_MULTIPLIER
-
-    # Spring boost
-    spring_mask = (moisture > SPRING_MOISTURE_THRESHOLD) & (elevation < SPRING_ELEVATION_MAX)
-    flow_acc[spring_mask] += SPRING_FLOW_BONUS
-
-    # River threshold
-    is_river = (flow_acc >= RIVER_FLOW_THRESHOLD) & is_land
-    print("River tiles:", np.sum(is_river))
-    return is_river, flow_acc, flow_dir
 
 # =============================================================================
 # DERIVED TERRAIN MAPS (for expanded biome system)
@@ -1231,8 +1071,7 @@ def compute_expanded_biome_thresholds(temperature, moisture, elevation, slope, r
 
 def assign_expanded_biome(temp, moist, elev, slope, roughness, dist_river, dist_coast,
                           landform, thresholds, is_lake_tile, is_river_tile,
-                          stochastic_value=0.5, dist_ocean=None, dist_mountain=None,
-                          dist_hills=None):
+                          stochastic_value=0.5):
     """
     Assign a specific biome to a single tile based on environmental conditions.
     Uses relative comparisons with dynamic thresholds.
@@ -1243,25 +1082,17 @@ def assign_expanded_biome(temp, moist, elev, slope, roughness, dist_river, dist_
     
     t = thresholds
     
-    d_ocean = dist_coast if dist_ocean is None else float(dist_ocean)
-    d_mountain = 999.0 if dist_mountain is None else float(dist_mountain)
-    d_hills = 999.0 if dist_hills is None else float(dist_hills)
-
-    # Distance-driven controls
-    near_river = dist_river < 3.0
-    very_near_river = dist_river < 1.25
-    near_coast = d_ocean < 8.0
-    very_near_coast = d_ocean < 3.0
-    inland = d_ocean > 10.0
-    deep_inland = d_ocean > 24.0
-    foothills = (d_mountain < 7.0) or (d_hills < 4.0)
-    mountain_shadow_interior = deep_inland and d_mountain < 11.0
-    riparian_corridor = near_river and inland
-    low_relief = slope < t['slope_gentle']
+    # River proximity factor (normalized)
+    near_river = dist_river < 5
+    very_near_river = dist_river < 2
+    
+    # Coast proximity factor
+    near_coast = dist_coast < 8
+    very_near_coast = dist_coast < 3
 
     # Deterministic per-tile stochastic selector (0..1)
     rv = float(stochastic_value)
-
+    
     # ==========================================================================
     # MOUNTAIN BIOMES (landform == 'mountains')
     # ==========================================================================
@@ -1273,21 +1104,10 @@ def assign_expanded_biome(temp, moist, elev, slope, roughness, dist_river, dist_
         if temp < t['temp_cool']:
             return 'snow_mountains'
         # Forest mountains: moderate temp, sufficient moisture
-        if (
-            temp >= t['temp_cool']
-            and temp < t['temp_hot']
-            and moist > t['moist_moderate']
-            and rv < (0.72 if foothills else 0.58)
-        ):
+        if temp >= t['temp_cool'] and temp < t['temp_warm'] and moist > t['moist_moderate']:
             return 'forest_mountains'
         # Alpine meadows: moderate temp, near snowline
-        if (
-            temp >= t['temp_cool']
-            and temp <= t['temp_warm']
-            and elev > t['elev_high']
-            and moist > t['moist_arid']
-            and rv < 0.75
-        ):
+        if temp >= t['temp_cool'] and temp < t['temp_warm'] and elev > t['elev_high']:
             return 'alpine_meadows'
         # Rocky mountains: default mountain
         return 'rocky_mountains'
@@ -1302,14 +1122,8 @@ def assign_expanded_biome(temp, moist, elev, slope, roughness, dist_river, dist_
         # Forest hills: high moisture, moderate temp
         if moist > t['moist_wet'] and temp >= t['temp_cool']:
             return 'forest_hills'
-        if riparian_corridor and moist > t['moist_moderate'] and temp >= t['temp_cool'] and rv < 0.34:
-            return 'forest_hills'
         # Rocky hills: low moisture, high roughness
-        if (
-            moist < t['moist_dry']
-            or roughness > t['rough_rough']
-            or (mountain_shadow_interior and moist < t['moist_moderate'])
-        ):
+        if moist < t['moist_dry'] or roughness > t['rough_rough']:
             return 'rocky_hills'
         # Grassy hills: default for moderate conditions
         return 'grassy_hills'
@@ -1319,67 +1133,32 @@ def assign_expanded_biome(temp, moist, elev, slope, roughness, dist_river, dist_
     # ==========================================================================
     # Check for snow biomes first (cold overrides other conditions)
     if temp < t['temp_cold']:
-        if moist > t['moist_moderate'] and (near_river or foothills or near_coast):
+        if moist > t['moist_wet']:
             return 'snow_forest'
         return 'snow_plains'
-
-    # Dry-riparian transition: hot inland rivers can cross drylands without
-    # forcing surrounding tiles into lush biomes.
-    if (
-        inland
-        and near_river
-        and temp > t['temp_warm']
-        and moist < t['moist_wet'] * 1.08
-    ):
-        if roughness > t['rough_smooth'] and moist < t['moist_wet'] * 1.02 and rv < 0.58:
-            return 'rock_desert'
-        if moist < t['moist_moderate'] * 1.05 and rv < 0.38:
-            return 'sand_desert'
-        if moist < t['moist_wet'] * 0.98 and rv < 0.58:
-            return 'steppe'
-        if rv < 0.45:
-            return 'savanna'
-
+    
     # Wetland biomes (very wet, low elevation, near water)
-    if moist > t['moist_very_wet'] and elev < t['elev_mid'] and low_relief:
+    if moist > t['moist_very_wet'] and elev < t['elev_mid']:
         # Mangrove: warm coastal
-        if temp > t['temp_warm'] and very_near_coast and near_river:
+        if temp > t['temp_warm'] and very_near_coast:
             return 'mangrove'
         # Swamp: near rivers in very wet areas
-        if very_near_river and temp >= t['temp_cool'] and rv < 0.88:
+        if (very_near_river or (near_river and rv < 0.45)) and temp >= t['temp_cool']:
             return 'swamp'
         # Marsh: wet lowlands near water
-        if (near_river or near_coast) and temp >= t['temp_cool'] and rv < 0.84:
+        if (near_river or (near_coast and rv < 0.30)) and temp >= t['temp_cool']:
             return 'marsh'
-
-    # Oases are riparian islands of life inside warm, dry interiors.
-    if (
-        temp > t['temp_warm']
-        and inland
-        and very_near_river
-        and moist > t['moist_arid'] * 0.55
-        and moist < t['moist_moderate'] * 1.10
-        and rv < 0.74
-    ):
-        return 'oasis'
     
     # Desert biomes (hot and dry)
-    if temp > t['temp_warm'] and moist < t['moist_dry'] and (inland or mountain_shadow_interior):
+    if temp > t['temp_warm'] and moist < t['moist_dry']:
         # Oasis: desert with river nearby
-        if (
-            very_near_river
-            and inland
-            and moist > t['moist_arid'] * 0.55
-            and moist < t['moist_moderate'] * 1.10
-            and roughness < t['rough_rough']
-            and rv < 0.88
-        ):
+        if near_river and (moist > t['moist_arid'] or rv < 0.22):
             return 'oasis'
         # Badlands: dry, rough terrain
-        if roughness > t['rough_moderate'] and (foothills or elev > t['elev_mid']):
+        if roughness > t['rough_moderate']:
             return 'badlands'
         # Rock desert: rough or high terrain in desert climate
-        if roughness > t['rough_smooth'] or elev > t['elev_mid'] or foothills:
+        if roughness > t['rough_smooth'] or elev > t['elev_mid']:
             return 'rock_desert'
         # Sand desert: flat, hot, dry
         return 'sand_desert'
@@ -1387,59 +1166,45 @@ def assign_expanded_biome(temp, moist, elev, slope, roughness, dist_river, dist_
     # Forest biomes (sufficient moisture)
     if moist > t['moist_wet']:
         # Rainforest: hot, extremely wet
-        if (
-            temp > t['temp_warm']
-            and moist > t['moist_very_wet']
-            and (
-                near_coast or
-                (riparian_corridor and moist > t['moist_very_wet'] * 1.05 and rv < 0.28)
-            )
-            and rv < 0.86
-        ):
+        if temp > t['temp_warm'] and moist > t['moist_very_wet'] and rv < 0.82:
             return 'rainforest'
         # Tropical forest: warm, wet
-        if temp > t['temp_warm'] and (near_coast or moist > t['moist_very_wet'] or rv < 0.68):
+        if temp > t['temp_warm']:
             return 'tropical_forest'
         # Temperate forest: moderate temp, wet
-        if temp >= t['temp_cool'] and (foothills or near_coast or rv < 0.62):
+        if temp >= t['temp_cool']:
             return 'temperate_forest'
-        if rv < 0.65:
-            return 'woodland'
     
     # Plains/woodland biomes (remaining cases)
     if moist > t['moist_moderate']:
         # Meadow: river-adjacent fertile plains
-        if riparian_corridor and temp >= t['temp_cool'] and temp <= t['temp_hot'] and rv < 0.18:
+        if near_river and temp >= t['temp_cool'] and temp <= t['temp_warm'] and rv < 0.55:
             return 'meadow'
         # Savanna: warm moderate-moisture plains
-        if temp > t['temp_warm'] and moist < t['moist_wet'] and (deep_inland or rv < 0.58):
+        if temp > t['temp_warm'] and moist < t['moist_wet'] and rv < 0.62:
             return 'savanna'
-        # Woodland in transitional mid-moisture zones, especially foothills/coastal belts.
-        if foothills or near_coast or rv < 0.52:
+        # Woodland remains common but no longer crowding out all other moderate-moisture plains
+        if rv < 0.58:
             return 'woodland'
         return 'grassland'
 
     # Drier plains
     if moist < t['moist_dry']:
-        if temp > t['temp_warm'] and rv < 0.45:
-            return 'savanna'
-        if near_river and rv < 0.12:
-            return 'meadow'
         return 'steppe'
 
     # Transitional dry-to-moderate band
-    if near_river and rv < 0.16:
-        return 'meadow'
-    if temp > t['temp_warm'] and rv < 0.38:
+    if temp > t['temp_warm'] and rv < 0.42:
         return 'savanna'
-    if rv < 0.56:
+    if near_river and rv < 0.35:
+        return 'meadow'
+    if rv < 0.55:
         return 'grassland'
     return 'steppe'
 
 
 def assign_biomes_expanded(width, height, seed, is_land, is_mountain, is_lake, is_river,
                            temperature, moisture, elevation, slope, roughness,
-                           dist_river, dist_coast, is_island=None, dist_ocean=None):
+                           dist_river, dist_coast, is_island=None):
     """
     Expanded biome assignment using environmental variables.
     
@@ -1459,11 +1224,6 @@ def assign_biomes_expanded(width, height, seed, is_land, is_mountain, is_lake, i
     
     # Classify landforms
     landforms = classify_landforms(elevation, slope, land_mask, is_mountain)
-    is_hills = landforms == 'hills'
-    dist_mountain = ndimage.distance_transform_edt(~is_mountain)
-    dist_hills = ndimage.distance_transform_edt(~is_hills)
-    if dist_ocean is None:
-        dist_ocean = dist_coast
     
     # Compute dynamic thresholds
     thresholds = compute_expanded_biome_thresholds(
@@ -1489,10 +1249,7 @@ def assign_biomes_expanded(width, height, seed, is_land, is_mountain, is_lake, i
                 thresholds=thresholds,
                 is_lake_tile=is_lake[y, x],
                 is_river_tile=is_river[y, x],
-                stochastic_value=rng.random(),
-                dist_ocean=dist_ocean[y, x],
-                dist_mountain=dist_mountain[y, x],
-                dist_hills=dist_hills[y, x],
+                stochastic_value=rng.random()
             )
             biomes[y, x] = biome
     
@@ -1500,223 +1257,9 @@ def assign_biomes_expanded(width, height, seed, is_land, is_mountain, is_lake, i
     biomes = smooth_expanded_biomes(biomes, land_mask, temperature, moisture, elevation,
                                      slope, roughness, dist_river, dist_coast, landforms,
                                      thresholds, is_lake, is_river, seed)
-
-    biomes = enforce_expanded_biome_presence(
-        biomes, land_mask, landforms, temperature, moisture, elevation, slope, roughness,
-        dist_river, dist_coast, dist_ocean, dist_mountain, dist_hills,
-        thresholds, is_lake, is_river, seed
-    )
     
     return biomes
 
-
-def enforce_expanded_biome_presence(biomes, land_mask, landforms, temperature, moisture,
-                                    elevation, slope, roughness, dist_river, dist_coast,
-                                    dist_ocean, dist_mountain, dist_hills, thresholds,
-                                    is_lake, is_river, seed):
-    """
-    Ensure every expanded biome can appear naturally.
-    Missing biomes are only seeded onto tiles that strongly satisfy that biome's
-    environmental conditions; this avoids noisy biome speckling.
-    """
-    rng = np.random.default_rng(seed + 7137)
-    t = thresholds
-    effective_land = land_mask & ~is_lake
-    if not effective_land.any():
-        return biomes
-
-    def category_bonus(target_biome):
-        category = BIOME_CATEGORIES.get(target_biome, None)
-        if category is None or category == 'water':
-            return np.zeros_like(temperature, dtype=np.float32)
-        same_cat = np.zeros_like(effective_land, dtype=bool)
-        for existing_biome, existing_cat in BIOME_CATEGORIES.items():
-            if existing_cat == category:
-                same_cat |= (biomes == existing_biome)
-        if not same_cat.any():
-            return np.zeros_like(temperature, dtype=np.float32)
-        dist_same_cat = ndimage.distance_transform_edt(~same_cat)
-        return 0.12 * np.exp(-dist_same_cat / 5.0)
-
-    def choose_candidates(target_biome):
-        score = np.zeros_like(temperature, dtype=np.float32)
-        mask = effective_land.copy()
-        plains = landforms == 'plains'
-        hills = landforms == 'hills'
-        mountains = landforms == 'mountains'
-        near_river = dist_river < 3.0
-        very_near_river = dist_river < 1.4
-        near_river = dist_river < 2.8
-        near_coast = dist_ocean < 8.0
-        very_near_coast = dist_ocean < 3.0
-        inland = dist_ocean > 10.0
-        deep_inland = dist_ocean > 24.0
-        foothills = (dist_mountain < 7.0) | (dist_hills < 4.0)
-        low_relief = slope < t['slope_gentle']
-
-        if target_biome == 'grassland':
-            mask &= plains & (moisture >= t['moist_dry']) & (moisture <= t['moist_wet'])
-            score = 1.0 - np.abs(moisture - t['moist_moderate'])
-        elif target_biome == 'meadow':
-            mask &= plains & near_river & inland & (temperature >= t['temp_cool']) & (moisture > t['moist_moderate'])
-            score = np.exp(-dist_river / 1.8) + 0.45 * moisture
-        elif target_biome == 'steppe':
-            mask &= plains & (moisture < t['moist_moderate']) & inland
-            score = (t['moist_moderate'] - moisture) + 0.25 * np.clip(dist_ocean / 35.0, 0.0, 1.0)
-        elif target_biome == 'savanna':
-            mask &= plains & (temperature > t['temp_warm']) & (moisture > t['moist_dry']) & (moisture < t['moist_wet'])
-            score = temperature - np.abs(moisture - (t['moist_dry'] + t['moist_moderate']) * 0.5)
-        elif target_biome == 'temperate_forest':
-            mask &= plains & (temperature >= t['temp_cool']) & (temperature <= t['temp_hot']) & (moisture > t['moist_wet'])
-            score = moisture + 0.20 * foothills
-        elif target_biome == 'woodland':
-            mask &= plains & (moisture > t['moist_moderate']) & (moisture <= t['moist_wet'])
-            score = 1.0 - np.abs(moisture - (t['moist_moderate'] + t['moist_wet']) * 0.5)
-        elif target_biome == 'tropical_forest':
-            mask &= plains & (temperature > t['temp_warm']) & (moisture > t['moist_wet'])
-            score = 0.7 * temperature + 0.3 * moisture
-        elif target_biome == 'rainforest':
-            mask &= plains & (temperature > t['temp_warm']) & (moisture > t['moist_very_wet']) & (near_coast | near_river)
-            score = moisture + 0.25 * np.exp(-dist_ocean / 14.0)
-        elif target_biome == 'sand_desert':
-            mask &= plains & deep_inland & (temperature > t['temp_warm']) & (moisture < t['moist_dry']) & (roughness < t['rough_moderate'])
-            score = temperature + (t['moist_dry'] - moisture)
-        elif target_biome == 'rock_desert':
-            mask &= plains & inland & (temperature > t['temp_warm']) & (moisture < t['moist_dry']) & ((roughness > t['rough_smooth']) | foothills)
-            score = roughness + 0.25 * (temperature - moisture)
-        elif target_biome == 'badlands':
-            mask &= plains & inland & (temperature > t['temp_warm']) & (moisture < t['moist_dry']) & (roughness > t['rough_moderate'])
-            score = roughness + 0.35 * np.clip(dist_mountain / 12.0, 0.0, 1.0)
-        elif target_biome == 'oasis':
-            strict_mask = (
-                plains
-                & very_near_river
-                & inland
-                & (temperature > t['temp_warm'])
-                & (moisture > t['moist_arid'] * 0.55)
-                & (moisture < t['moist_moderate'] * 1.10)
-            )
-            fallback_mask = (
-                plains
-                & near_river
-                & inland
-                & (temperature > t['temp_warm'])
-                & (moisture < t['moist_wet'] * 1.15)
-            )
-            mask &= (strict_mask | fallback_mask)
-            score = (
-                np.exp(-dist_river / 1.2)
-                + 0.35 * temperature
-                + 0.25 * np.clip((t['moist_moderate'] - moisture), 0.0, 1.0)
-                + 0.10 * strict_mask.astype(np.float32)
-            )
-        elif target_biome == 'snow_plains':
-            mask &= plains & (temperature < t['temp_cold']) & (moisture <= t['moist_wet'])
-            score = (t['temp_cold'] - temperature) + 0.20 * (1.0 - moisture)
-        elif target_biome == 'snow_forest':
-            mask &= plains & (temperature < t['temp_cold']) & (moisture > t['moist_moderate'])
-            score = (t['temp_cold'] - temperature) + moisture
-        elif target_biome == 'snow_hills':
-            mask &= hills & (temperature < t['temp_cool'])
-            score = (t['temp_cool'] - temperature) + 0.25 * elevation
-        elif target_biome == 'grassy_hills':
-            mask &= hills & (moisture >= t['moist_dry']) & (moisture <= t['moist_wet']) & (temperature >= t['temp_cool'])
-            score = 1.0 - np.abs(moisture - t['moist_moderate'])
-        elif target_biome == 'forest_hills':
-            mask &= hills & (moisture > t['moist_wet']) & (temperature >= t['temp_cool'])
-            score = moisture + 0.2 * np.exp(-dist_river / 5.0)
-        elif target_biome == 'rocky_hills':
-            mask &= hills & ((moisture < t['moist_dry']) | (roughness > t['rough_rough']))
-            score = roughness + (t['moist_dry'] - moisture)
-        elif target_biome == 'rocky_mountains':
-            mask &= mountains & (temperature >= t['temp_cold'])
-            score = elevation + 0.25 * roughness
-        elif target_biome == 'snow_mountains':
-            mask &= mountains & (temperature < t['temp_cool'])
-            score = (t['temp_cool'] - temperature) + 0.4 * elevation
-        elif target_biome == 'forest_mountains':
-            mask &= mountains & (temperature >= t['temp_cool']) & (moisture > t['moist_moderate'])
-            score = moisture + 0.2 * np.exp(-dist_river / 7.0)
-        elif target_biome == 'alpine_meadows':
-            mask &= mountains & (temperature >= t['temp_cool']) & (temperature <= t['temp_warm']) & (elevation > t['elev_high']) & (moisture > t['moist_arid'])
-            score = elevation + 0.35 * moisture
-        elif target_biome == 'glacier':
-            mask &= mountains & (temperature < t['temp_cold']) & (elevation > t['elev_alpine'])
-            score = (t['temp_cold'] - temperature) + elevation
-        elif target_biome == 'swamp':
-            mask &= plains & very_near_river & low_relief & (moisture > t['moist_very_wet']) & (temperature >= t['temp_cool'])
-            score = moisture + np.exp(-dist_river / 1.4)
-        elif target_biome == 'marsh':
-            mask &= plains & low_relief & (moisture > t['moist_wet']) & ((near_river) | (near_coast)) & (temperature >= t['temp_cool'])
-            score = moisture + 0.2 * np.exp(-dist_river / 3.0) + 0.15 * np.exp(-dist_ocean / 5.0)
-        elif target_biome == 'mangrove':
-            mask &= plains & very_near_coast & near_river & (temperature > t['temp_warm']) & (moisture > t['moist_wet'])
-            score = moisture + 0.3 * np.exp(-dist_ocean / 2.0)
-        else:
-            return np.zeros_like(mask), np.zeros_like(score)
-
-        # Encourage placement near compatible regional category without forcing it.
-        score = score + category_bonus(target_biome)
-
-        # Deterministic micro-variation to avoid picking perfect-center singularities.
-        score = score + rng.random(score.shape) * 0.02
-        score = np.where(mask, score, -1e9)
-        return mask, score
-
-    for biome in EXPANDED_REQUIRED_BIOMES:
-        if ((biomes == biome) & effective_land).any():
-            continue
-
-        candidate_mask, candidate_score = choose_candidates(biome)
-        if not candidate_mask.any():
-            continue
-
-        flat_idx = int(np.argmax(candidate_score))
-        by, bx = np.unravel_index(flat_idx, biomes.shape)
-        if not candidate_mask[by, bx]:
-            continue
-
-        biomes[by, bx] = biome
-
-        # Grow a tiny local patch when naturally possible (prevents 1-pixel glitter).
-        local_added = 0
-        for dy, dx in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-            ny, nx = by + dy, bx + dx
-            if not (0 <= ny < biomes.shape[0] and 0 <= nx < biomes.shape[1]):
-                continue
-            if local_added >= 2:
-                break
-            if not candidate_mask[ny, nx]:
-                continue
-            if biomes[ny, nx] in ('ocean', 'lake'):
-                continue
-            if candidate_score[ny, nx] < candidate_score[by, bx] * 0.88:
-                continue
-            biomes[ny, nx] = biome
-            local_added += 1
-
-    # Last-resort oasis injection so warm inland river valleys are never blocked.
-    if not ((biomes == 'oasis') & effective_land).any():
-        fallback_oasis = (
-            effective_land
-            & (landforms != 'mountains')
-            & (dist_river < 4.5)
-            & (dist_ocean > 6.0)
-            & (temperature > t['temp_warm'] * 0.85)
-        )
-        if fallback_oasis.any():
-            oasis_score = (
-                np.exp(-dist_river / 1.9)
-                + 0.40 * temperature
-                - 0.10 * np.clip(moisture - t['moist_moderate'], 0.0, 1.0)
-                + 0.06 * np.exp(-dist_ocean / 12.0)
-            )
-            oasis_score = np.where(fallback_oasis, oasis_score, -1e9)
-            oy, ox = np.unravel_index(int(np.argmax(oasis_score)), biomes.shape)
-            if fallback_oasis[oy, ox]:
-                biomes[oy, ox] = 'oasis'
-
-    return biomes
 
 def smooth_expanded_biomes(biomes, land_mask, temperature, moisture, elevation,
                            slope, roughness, dist_river, dist_coast, landforms,
@@ -1727,10 +1270,7 @@ def smooth_expanded_biomes(biomes, land_mask, temperature, moisture, elevation,
     """
     height, width = biomes.shape
     rng = np.random.default_rng(seed + 7100)
-    rare_sensitive_biomes = {
-        'oasis', 'mangrove', 'rainforest', 'meadow', 'savanna',
-        'swamp', 'marsh', 'glacier', 'alpine_meadows', 'snow_hills'
-    }
+    rare_sensitive_biomes = {'oasis', 'mangrove', 'rainforest', 'meadow', 'savanna', 'grassland'}
     
     for _ in range(num_passes):
         changes = []
@@ -1817,86 +1357,6 @@ def is_biome_compatible(biome, landform, temp, moist, thresholds):
     return True
 
 
-def pick_biome_for_category(category, temp, moist, elev, dist_river, dist_coast, thresholds, rng):
-    """Select a climate-compatible biome for a target category."""
-    t = thresholds
-
-    if category == 'mountains':
-        if temp < t['temp_cold'] and elev > t['elev_alpine']:
-            return 'glacier'
-        if temp < t['temp_cool']:
-            return 'snow_mountains'
-        if moist > t['moist_moderate'] and temp <= t['temp_warm']:
-            return 'forest_mountains'
-        if elev > t['elev_high'] and temp >= t['temp_cool'] and moist > t['moist_arid']:
-            return 'alpine_meadows'
-        return 'rocky_mountains'
-
-    if category == 'hills':
-        if temp < t['temp_cool']:
-            return 'snow_hills'
-        if moist > t['moist_wet']:
-            return 'forest_hills'
-        if moist < t['moist_dry'] or elev > t['elev_high']:
-            return 'rocky_hills'
-        return 'grassy_hills'
-
-    if category == 'plains':
-        if temp < t['temp_cold']:
-            return 'snow_forest' if moist > t['moist_moderate'] else 'snow_plains'
-        if dist_river < 2.0 and moist > t['moist_moderate'] and t['temp_cool'] <= temp <= t['temp_hot'] and rng.random() < 0.34:
-            return 'meadow'
-        if temp > t['temp_warm'] and moist < t['moist_moderate']:
-            return 'savanna'
-        if moist < t['moist_dry']:
-            return 'steppe'
-        return 'grassland'
-
-    if category == 'forests':
-        if temp < t['temp_cold'] and moist > t['moist_moderate']:
-            return 'snow_forest'
-        if temp > t['temp_warm'] and moist > t['moist_very_wet']:
-            return 'rainforest'
-        if temp > t['temp_warm']:
-            return 'tropical_forest'
-        if moist > t['moist_wet']:
-            return 'temperate_forest'
-        return 'woodland'
-
-    if category == 'deserts':
-        if (
-            dist_river < 1.25
-            and moist > t['moist_arid'] * 0.55
-            and moist < t['moist_moderate'] * 1.10
-            and temp > t['temp_warm']
-            and dist_coast > 8
-        ):
-            return 'oasis'
-        if elev > t['elev_mid'] and moist < t['moist_dry'] and rng.random() < 0.45:
-            return 'badlands'
-        if (elev > t['elev_low'] or moist < t['moist_arid']) and temp > t['temp_warm']:
-            return 'rock_desert'
-        return 'sand_desert'
-
-    if category == 'snow':
-        if elev > t['elev_alpine'] and temp < t['temp_cold']:
-            return 'glacier'
-        if elev > t['elev_high'] and temp < t['temp_cool']:
-            return 'snow_hills'
-        if moist > t['moist_moderate']:
-            return 'snow_forest'
-        return 'snow_plains'
-
-    if category == 'wetlands':
-        if dist_coast < 3 and dist_river < 2 and temp > t['temp_warm'] and moist > t['moist_wet']:
-            return 'mangrove'
-        if dist_river < 2 and moist > t['moist_very_wet']:
-            return 'swamp'
-        return 'marsh'
-
-    return 'grassland'
-
-
 def enforce_biome_categories(biomes, land_mask, temperature, moisture, elevation, 
                               dist_river, dist_lake, dist_coast, seed):
     """
@@ -1931,25 +1391,6 @@ def enforce_biome_categories(biomes, land_mask, temperature, moisture, elevation
     
     if total_land == 0:
         return biomes
-
-    land_temp = temperature[land_mask]
-    land_moist = moisture[land_mask]
-    land_elev = elevation[land_mask]
-    thresholds = {
-        'temp_cold': float(np.percentile(land_temp, 20)),
-        'temp_cool': float(np.percentile(land_temp, 35)),
-        'temp_warm': float(np.percentile(land_temp, 65)),
-        'temp_hot': float(np.percentile(land_temp, 80)),
-        'moist_arid': float(np.percentile(land_moist, 15)),
-        'moist_dry': float(np.percentile(land_moist, 30)),
-        'moist_moderate': float(np.percentile(land_moist, 50)),
-        'moist_wet': float(np.percentile(land_moist, 70)),
-        'moist_very_wet': float(np.percentile(land_moist, 85)),
-        'elev_low': float(np.percentile(land_elev, 25)),
-        'elev_mid': float(np.percentile(land_elev, 50)),
-        'elev_high': float(np.percentile(land_elev, 75)),
-        'elev_alpine': float(np.percentile(land_elev, 90)),
-    }
     
     # Compute target counts for each category
     target_tile_counts = {}
@@ -2047,23 +1488,23 @@ def enforce_biome_categories(biomes, land_mask, temperature, moisture, elevation
                     y, x = edge_candidates[i][:2]
                     old_cat = BIOME_CATEGORIES.get(biomes[y, x], None)
                     
-                    new_biome = pick_biome_for_category(
-                        deficit_cat,
-                        temperature[y, x], moisture[y, x], elevation[y, x],
-                        dist_river[y, x], dist_coast[y, x], thresholds, rng
-                    )
-                    biomes[y, x] = new_biome
-
-                    # Update counts
-                    if old_cat:
-                        category_counts[old_cat] -= 1
-                        category_tiles[old_cat].remove((y, x))
-                    category_counts[deficit_cat] += 1
-                    category_tiles[deficit_cat].append((y, x))
-
-                    surplus_amt -= 1
-                    deficits[deficit_cat] = max(0, deficit_amt - 1)
-                    changes_made = True
+                    # Pick a random biome from the deficit category
+                    deficit_biomes = [b for b, c in BIOME_CATEGORIES.items() 
+                                     if c == deficit_cat and c != 'water']
+                    if deficit_biomes:
+                        new_biome = rng.choice(deficit_biomes)
+                        biomes[y, x] = new_biome
+                        
+                        # Update counts
+                        if old_cat:
+                            category_counts[old_cat] -= 1
+                            category_tiles[old_cat].remove((y, x))
+                        category_counts[deficit_cat] += 1
+                        category_tiles[deficit_cat].append((y, x))
+                        
+                        surplus_amt -= 1
+                        deficits[deficit_cat] = max(0, deficit_amt - 1)
+                        changes_made = True
         
         if not changes_made:
             break
@@ -2246,157 +1687,127 @@ def compute_slope_direction(elevation, width, height):
     return aspect, grad_x, grad_y
 
 
-def estimate_forest_potential(width, height, elevation, is_land, dist_ocean, dist_river,
-                              dist_lake, slope):
-    """
-    Estimate forest potential before final biome assignment.
-    This is a lightweight ecological prior used by climate simulation.
-    """
-    forest_potential = np.zeros((height, width), dtype=np.float32)
-    if not is_land.any():
-        return forest_potential
-
-    land_ocean_dist = dist_ocean[is_land]
-    land_river_dist = dist_river[is_land]
-    land_lake_dist = dist_lake[is_land]
-    ocean_decay = max(12.0, float(np.median(land_ocean_dist) * 0.8)) if len(land_ocean_dist) > 0 else 18.0
-    river_decay = max(5.0, float(np.percentile(land_river_dist, 85) * 0.25)) if len(land_river_dist) > 0 else 9.0
-    lake_decay = max(7.0, float(np.percentile(land_lake_dist, 85) * 0.25)) if len(land_lake_dist) > 0 else 12.0
-
-    yy = np.arange(height, dtype=np.float32).reshape(-1, 1)
-    lat_abs = np.abs((yy - (height / 2.0)) / max(1.0, height / 2.0))
-    latitude_temp_guess = 0.5 * (1.0 + np.cos(np.pi * lat_abs))
-    temp_guess = latitude_temp_guess - elevation * 0.42
-    temp_pref = np.exp(-((temp_guess - 0.55) ** 2) / (2.0 * 0.19 ** 2))
-
-    ocean_term = np.exp(-dist_ocean / ocean_decay)
-    river_term = np.exp(-dist_river / river_decay)
-    lake_term = np.exp(-dist_lake / lake_decay)
-    slope_penalty = np.clip(slope / max(0.12, float(np.percentile(slope[is_land], 85))), 0.0, 1.0)
-
-    forest_potential = (
-        0.32 * ocean_term +
-        0.30 * river_term +
-        0.18 * lake_term +
-        0.20 * temp_pref
-    )
-    forest_potential = forest_potential - slope_penalty * 0.18
-    forest_potential = np.clip(forest_potential, 0.0, 1.0).astype(np.float32)
-    forest_potential[~is_land] = 0.0
-    return forest_potential
-
-
 def generate_natural_temperature(width, height, seed, elevation, is_land, is_mountain,
                                   dist_ocean, dist_river, dist_lake, slope, aspect,
-                                  forest_hint=None, dist_mountain=None, dist_hills=None):
+                                  forest_hint=None):
     """
-    Generate temperature with broad-scale and local geography:
-    latitude, continentality, longitude/air-mass variation, elevation,
-    water moderation, slope exposure, and mountain/hill proximity effects.
+    Generate temperature map using natural geographic influences.
+    
+    Components:
+    1. Latitude influence (equator warm, poles cold)
+    2. Elevation cooling (higher = colder)
+    3. Ocean moderation (coastal areas have milder temperatures)
+    4. River/lake cooling (water bodies cool nearby land)
+    5. Forest cooling (shading and evapotranspiration)
+    6. Slope orientation (equator-facing slopes warmer)
+    
+    All thresholds derived dynamically from data distributions.
     """
-    temperature = np.zeros((height, width), dtype=np.float32)
-
-    if not is_land.any():
-        temperature.fill(0.5)
-        return temperature
-
+    temperature = np.zeros((height, width))
+    
+    # Get land elevation stats for dynamic scaling
     land_elev = elevation[is_land]
+    elev_mean = np.mean(land_elev) if len(land_elev) > 0 else 0.5
+    elev_std = np.std(land_elev) if len(land_elev) > 0 else 0.2
     elev_max = np.max(land_elev) if len(land_elev) > 0 else 1.0
-
+    
+    # Distance stats for dynamic decay rates
     land_dist_ocean = dist_ocean[is_land]
     ocean_dist_median = np.median(land_dist_ocean) if len(land_dist_ocean) > 0 else 20.0
-    ocean_dist_p90 = np.percentile(land_dist_ocean, 90) if len(land_dist_ocean) > 0 else 45.0
-
+    
     land_dist_river = dist_river[is_land]
     river_dist_p75 = np.percentile(land_dist_river, 75) if len(land_dist_river) > 0 else 15.0
-
+    
     land_dist_lake = dist_lake[is_land]
     lake_dist_p75 = np.percentile(land_dist_lake, 75) if len(land_dist_lake) > 0 else 20.0
-
-    ocean_moderation_decay = max(10.0, ocean_dist_median * 0.85)
-    river_cooling_decay = max(4.0, river_dist_p75 * 0.28)
-    lake_cooling_decay = max(6.0, lake_dist_p75 * 0.30)
-    elev_cooling_scale = 0.52 / max(0.28, elev_max)
-
-    # Longitude-driven air-mass variability (deterministic by seed).
-    lon_phase = ((seed * 17) % 1009) / 1009.0 * 2.0 * np.pi
-    _, wind_dx, wind_dy = compute_wind_direction_field(seed, width, height)
-    wind_angle = np.arctan2(wind_dy, wind_dx)
-
+    
+    # Dynamic decay rates based on world geography
+    ocean_moderation_decay = max(10.0, ocean_dist_median * 0.8)
+    river_cooling_decay = max(5.0, river_dist_p75 * 0.3)
+    lake_cooling_decay = max(8.0, lake_dist_p75 * 0.3)
+    
+    # Elevation cooling factor (scaled to elevation distribution)
+    elev_cooling_scale = 0.5 / max(0.3, elev_max)
+    
     for y in range(height):
-        lat_normalized = (y - height / 2) / (height / 2)  # -1..1
-        lat_abs = abs(lat_normalized)
-
-        # Broad latitudinal control (warm equator / cold poles)
-        latitude_temp = 0.5 * (1.0 + np.cos(np.pi * lat_abs))
-
         for x in range(width):
-            if not is_land[y, x]:
-                continue
-
+            # 1. LATITUDE INFLUENCE
+            # Temperature varies smoothly from equator (warm) to poles (cold)
+            # Using cosine for smoother transition
+            lat_normalized = (y - height / 2) / (height / 2)  # -1 to 1
+            latitude_temp = 0.5 * (1.0 + np.cos(np.pi * abs(lat_normalized)))  # 1 at equator, 0 at poles
+            
+            # 2. ELEVATION COOLING
+            # Higher terrain is colder - scale based on elevation distribution
             elev = elevation[y, x]
+            elevation_cooling = elev * elev_cooling_scale
+            
+            # 3. OCEAN TEMPERATURE MODERATION
+            # Coastal areas have milder temperatures (less extreme hot/cold)
+            # Ocean acts as thermal mass
             d_ocean = dist_ocean[y, x]
-            d_river = dist_river[y, x]
-            d_lake = dist_lake[y, x]
-
-            # More continental interiors have stronger longitudinal contrasts.
-            continentality = np.clip(d_ocean / max(1.0, ocean_dist_p90), 0.0, 1.0)
-            lon_wave = np.sin((2.0 * np.pi * x / max(1.0, width)) + lon_phase)
-            lon_effect = lon_wave * (0.06 + 0.04 * continentality) * (1.0 - 0.55 * lat_abs)
-
-            # Base thermal structure
-            base_temp = latitude_temp + lon_effect
-            base_temp -= elev * elev_cooling_scale
-
-            # Coastal thermal moderation
             ocean_moderation = np.exp(-d_ocean / ocean_moderation_decay)
-            base_temp = base_temp * (1.0 - ocean_moderation * 0.34) + 0.50 * ocean_moderation * 0.34
-
-            # Local water-body cooling
-            river_cooling = 0.065 * np.exp(-d_river / river_cooling_decay)
-            lake_cooling = 0.090 * np.exp(-d_lake / lake_cooling_decay)
-            base_temp -= (river_cooling + lake_cooling)
-
-            # Slope exposure: equator-facing warmer; pole-facing cooler.
-            slope_sun_factor = 0.0
-            if slope[y, x] > 0.08:
+            # Moderation pulls temperature toward moderate (0.5)
+            moderation_target = 0.5
+            
+            # 4. RIVER COOLING
+            d_river = dist_river[y, x]
+            river_cooling = 0.08 * np.exp(-d_river / river_cooling_decay)
+            
+            # 5. LAKE COOLING
+            d_lake = dist_lake[y, x]
+            lake_cooling = 0.10 * np.exp(-d_lake / lake_cooling_decay)
+            
+            # 6. SLOPE ORIENTATION (sun exposure)
+            # Slopes facing the equator receive more sunlight
+            if is_land[y, x] and slope[y, x] > 0.1:
+                # Determine if slope faces toward equator
                 slope_aspect = aspect[y, x]
-                equator_angle = np.pi / 2 if y < height / 2 else -np.pi / 2
+                
+                # Equator is at y = height/2
+                # North hemisphere (y < height/2): equator-facing = south-facing (aspect ~ pi/2)
+                # South hemisphere (y > height/2): equator-facing = north-facing (aspect ~ -pi/2)
+                if y < height / 2:
+                    equator_angle = np.pi / 2  # South
+                else:
+                    equator_angle = -np.pi / 2  # North
+                
+                # Calculate how much the slope faces the equator
                 angle_diff = np.abs(slope_aspect - equator_angle)
                 if angle_diff > np.pi:
                     angle_diff = 2 * np.pi - angle_diff
-                slope_sun_factor = np.cos(angle_diff) * slope[y, x] * 0.09
-                base_temp += slope_sun_factor
-
-                # Orographic thermal asymmetry: leeward warming, windward cooling.
-                wind_diff = np.abs(slope_aspect - wind_angle)
-                if wind_diff > np.pi:
-                    wind_diff = 2 * np.pi - wind_diff
-                align = np.cos(wind_diff)
-                windward = max(0.0, align)
-                leeward = max(0.0, -align)
-                base_temp += leeward * slope[y, x] * 0.030
-                base_temp -= windward * slope[y, x] * 0.022
-
-            # Terrain-neighbor cooling bands
-            if dist_mountain is not None:
-                base_temp -= 0.045 * np.exp(-dist_mountain[y, x] / 6.5)
-            if dist_hills is not None:
-                base_temp -= 0.018 * np.exp(-dist_hills[y, x] / 5.5)
-
-            # Forest canopy moderation
-            if forest_hint is not None:
-                base_temp -= forest_hint[y, x] * 0.045
-
+                
+                # Equator-facing slopes are warmer, pole-facing are cooler
+                slope_sun_factor = np.cos(angle_diff) * slope[y, x] * 0.1
+            else:
+                slope_sun_factor = 0.0
+            
+            # 7. FOREST COOLING (if forest hint available)
+            forest_cooling = 0.0
+            if forest_hint is not None and is_land[y, x]:
+                forest_cooling = forest_hint[y, x] * 0.05
+            
+            # Combine all factors
+            base_temp = latitude_temp - elevation_cooling + slope_sun_factor
+            base_temp = base_temp - river_cooling - lake_cooling - forest_cooling
+            
+            # Apply ocean moderation (blend toward moderate temperature)
+            if is_land[y, x]:
+                base_temp = base_temp * (1 - ocean_moderation * 0.3) + moderation_target * ocean_moderation * 0.3
+            
             temperature[y, x] = base_temp
-
-    # Normalize on land
-    land_temp = temperature[is_land]
-    t_min, t_max = land_temp.min(), land_temp.max()
-    if t_max > t_min:
-        temperature[is_land] = (temperature[is_land] - t_min) / (t_max - t_min)
-    temperature = np.clip(temperature, 0.0, 1.0)
+    
+    # Normalize temperature to [0, 1] based on land values
+    if is_land.any():
+        land_temp = temperature[is_land]
+        t_min, t_max = land_temp.min(), land_temp.max()
+        if t_max > t_min:
+            temperature[is_land] = (temperature[is_land] - t_min) / (t_max - t_min)
+        temperature = np.clip(temperature, 0.0, 1.0)
+    
+    # Ocean gets moderate temperature
     temperature[~is_land] = 0.5
+    
     return temperature
 
 
@@ -2470,7 +1881,7 @@ def propagate_moisture_with_wind(moisture_sources, elevation, is_land, is_mounta
     return moisture
 
 
-def compute_rain_shadow(elevation, is_mountain, wind_dx, wind_dy, width, height, is_hills=None):
+def compute_rain_shadow(elevation, is_mountain, wind_dx, wind_dy, width, height):
     """
     Compute rain shadow intensity map.
     Areas downwind of mountains receive less moisture.
@@ -2485,11 +1896,6 @@ def compute_rain_shadow(elevation, is_mountain, wind_dx, wind_dy, width, height,
         mountain_elev_median = np.median(mountain_elev)
     else:
         mountain_elev_median = 0.7
-    if is_hills is not None and is_hills.any():
-        hill_elev = elevation[is_hills]
-        hill_elev_median = np.median(hill_elev)
-    else:
-        hill_elev_median = 0.45
     
     # Maximum distance to check for upwind mountains
     max_shadow_dist = 60
@@ -2507,22 +1913,15 @@ def compute_rain_shadow(elevation, is_mountain, wind_dx, wind_dy, width, height,
                 if not (0 <= check_x < width and 0 <= check_y < height):
                     break
                 
-                # Check for blocking terrain (mountains strongest, hills moderate).
-                is_mtn_block = is_mountain[check_y, check_x] or elevation[check_y, check_x] > mountain_elev_median
-                is_hill_block = (
-                    is_hills is not None and
-                    is_hills[check_y, check_x] and
-                    elevation[check_y, check_x] >= hill_elev_median
-                )
-                if is_mtn_block or is_hill_block:
+                # Check for high terrain (mountains or high elevation)
+                if is_mountain[check_y, check_x] or elevation[check_y, check_x] > mountain_elev_median:
                     # Calculate shadow strength based on:
                     # - Distance (closer mountains cast stronger shadow)
                     # - Elevation difference (higher mountains cast stronger shadow)
                     dist_factor = 1.0 - (dist / max_shadow_dist)
                     elev_factor = elevation[check_y, check_x] / mountain_elev_median
                     
-                    terrain_weight = 0.9 if is_mtn_block else 0.55
-                    local_shadow = dist_factor * min(1.0, elev_factor) * terrain_weight
+                    local_shadow = dist_factor * min(1.0, elev_factor) * 0.9
                     shadow_strength = max(shadow_strength, local_shadow)
             
             shadow[y, x] = shadow_strength
@@ -2533,196 +1932,122 @@ def compute_rain_shadow(elevation, is_mountain, wind_dx, wind_dy, width, height,
     return shadow
 
 
-def compute_upwind_ocean_fetch(is_land, elevation, is_mountain, wind_dx, wind_dy, width, height,
-                               max_fetch=72):
-    """
-    Estimate how directly each tile is connected to upwind ocean moisture.
-    Returns:
-      fetch: 0..1 moisture fetch strength
-      blocking: 0..1 terrain blocking severity along fetch path
-    """
-    fetch = np.zeros((height, width), dtype=np.float32)
-    blocking = np.zeros((height, width), dtype=np.float32)
-
-    for y in range(height):
-        for x in range(width):
-            if not is_land[y, x]:
-                continue
-
-            water_reach = 0.0
-            terrain_block = 0.0
-            base_elev = elevation[y, x]
-
-            for dist in range(4, max_fetch + 1, 3):
-                check_x = int(x - wind_dx * dist)
-                check_y = int(y - wind_dy * dist)
-                if not (0 <= check_x < width and 0 <= check_y < height):
-                    break
-
-                if not is_land[check_y, check_x]:
-                    water_reach = max(water_reach, 1.0 - dist / max_fetch)
-                    break
-
-                sample_elev = elevation[check_y, check_x]
-                if is_mountain[check_y, check_x]:
-                    terrain_block += 0.22
-                elif sample_elev > base_elev + 0.10:
-                    terrain_block += 0.10
-                elif sample_elev > base_elev + 0.05:
-                    terrain_block += 0.05
-
-            fetch[y, x] = np.clip(water_reach, 0.0, 1.0)
-            blocking[y, x] = np.clip(terrain_block, 0.0, 1.0)
-
-    fetch = ndimage.gaussian_filter(fetch, sigma=1.2)
-    blocking = ndimage.gaussian_filter(blocking, sigma=1.0)
-    return fetch, blocking
-
-
 def generate_natural_moisture(width, height, seed, elevation, is_land, is_mountain,
                                dist_ocean, dist_river, dist_lake, temperature,
-                               slope=None, aspect=None, forest_hint=None, is_hills=None,
-                               dist_mountain=None, dist_hills=None):
+                               slope=None, forest_hint=None):
     """
-    Generate moisture map using wind transport, ocean fetch, rain shadows,
-    river/lake humidity, terrain blocking, latitude belts, and forest feedback.
+    Generate moisture map using natural atmospheric simulation.
+    
+    Components:
+    1. Ocean moisture source (primary humidity source)
+    2. Wind-based moisture advection
+    3. Mountain rain shadow effect
+    4. Elevation moisture loss
+    5. River moisture contribution
+    6. Lake moisture contribution
+    7. Forest transpiration feedback
+    8. Temperature interaction
+    
+    All parameters derived dynamically from data distributions.
     """
-    moisture = np.zeros((height, width), dtype=np.float32)
-    if not is_land.any():
-        moisture.fill(1.0)
-        return moisture, (0.0, 0.0), np.zeros((height, width), dtype=np.float32)
-
     # Get wind direction
-    _, wind_dx, wind_dy = compute_wind_direction_field(seed, width, height)
-    wind_angle = np.arctan2(wind_dy, wind_dx)
-
-    # Dynamic scales from land statistics
+    wind_angle, wind_dx, wind_dy = compute_wind_direction_field(seed, width, height)
+    
+    # Get statistics for dynamic scaling
     land_dist_ocean = dist_ocean[is_land]
-    ocean_dist_max = float(np.max(land_dist_ocean)) if len(land_dist_ocean) > 0 else 50.0
-    ocean_dist_median = float(np.median(land_dist_ocean)) if len(land_dist_ocean) > 0 else 20.0
-    ocean_dist_p90 = float(np.percentile(land_dist_ocean, 90)) if len(land_dist_ocean) > 0 else 45.0
-
+    ocean_dist_max = np.max(land_dist_ocean) if len(land_dist_ocean) > 0 else 50.0
+    ocean_dist_median = np.median(land_dist_ocean) if len(land_dist_ocean) > 0 else 20.0
+    
     land_dist_river = dist_river[is_land]
-    river_dist_p90 = float(np.percentile(land_dist_river, 90)) if len(land_dist_river) > 0 else 25.0
-
+    river_dist_p90 = np.percentile(land_dist_river, 90) if len(land_dist_river) > 0 else 25.0
+    
     land_dist_lake = dist_lake[is_land]
-    lake_dist_p90 = float(np.percentile(land_dist_lake, 90)) if len(land_dist_lake) > 0 else 30.0
-
+    lake_dist_p90 = np.percentile(land_dist_lake, 90) if len(land_dist_lake) > 0 else 30.0
+    
+    # Dynamic decay rates
     ocean_decay = max(15.0, ocean_dist_median * 0.7)
     river_decay = max(5.0, river_dist_p90 * 0.2)
     lake_decay = max(8.0, lake_dist_p90 * 0.25)
-
-    # Core moisture sources
+    
+    # 1. OCEAN MOISTURE SOURCE
+    # Exponential decay from coast
     ocean_moisture = np.exp(-dist_ocean / ocean_decay)
+    
+    # 2. RIVER MOISTURE CONTRIBUTION
     river_moisture = 0.5 * np.exp(-dist_river / river_decay)
+    
+    # 3. LAKE MOISTURE CONTRIBUTION
     lake_moisture = 0.6 * np.exp(-dist_lake / lake_decay)
-
-    fetch, terrain_blocking = compute_upwind_ocean_fetch(
-        is_land, elevation, is_mountain, wind_dx, wind_dy, width, height, max_fetch=72
-    )
-
-    moisture_sources = (
-        0.52 * ocean_moisture +
-        0.27 * river_moisture +
-        0.21 * lake_moisture +
-        0.18 * fetch
-    )
-    moisture_sources = np.clip(moisture_sources, 0.0, 1.0)
+    
+    # Combined base moisture sources
+    moisture_sources = np.maximum(ocean_moisture, np.maximum(river_moisture, lake_moisture))
+    
+    # Ocean tiles are saturated
     moisture_sources[~is_land] = 1.0
-
-    # Wind advection / diffusion backbone
-    advected = propagate_moisture_with_wind(
+    
+    # 4. WIND-BASED MOISTURE PROPAGATION
+    moisture = propagate_moisture_with_wind(
         moisture_sources, elevation, is_land, is_mountain,
-        wind_dx, wind_dy, width, height, iterations=24
+        wind_dx, wind_dy, width, height, iterations=30
     )
-
-    rain_shadow = compute_rain_shadow(
-        elevation, is_mountain, wind_dx, wind_dy, width, height, is_hills=is_hills
-    )
-
-    # Latitude moisture belts: equatorial wet + subtropical dry + polar dry
-    y_coords = np.arange(height, dtype=np.float32).reshape(-1, 1)
-    lat_abs = np.abs((y_coords - height / 2.0) / max(1.0, height / 2.0))
-    equatorial_wet = np.exp(-(lat_abs ** 2) / (2.0 * 0.20 ** 2))
-    subtropical_dry = np.exp(-((lat_abs - 0.32) ** 2) / (2.0 * 0.10 ** 2))
-    polar_dry = np.exp(-((lat_abs - 0.85) ** 2) / (2.0 * 0.08 ** 2))
-    equatorial_wet = np.tile(equatorial_wet, (1, width))
-    subtropical_dry = np.tile(subtropical_dry, (1, width))
-    polar_dry = np.tile(polar_dry, (1, width))
-
-    # Windward and leeward terrain effects
-    windward = np.zeros((height, width), dtype=np.float32)
-    leeward = np.zeros((height, width), dtype=np.float32)
-    if slope is not None and aspect is not None:
-        wind_diff = np.abs(aspect - wind_angle)
-        wind_diff = np.where(wind_diff > np.pi, 2 * np.pi - wind_diff, wind_diff)
-        align = np.cos(wind_diff)
-        windward = np.clip(align, 0.0, 1.0) * slope
-        leeward = np.clip(-align, 0.0, 1.0) * slope
-
-    continentality = np.clip(dist_ocean / max(1.0, ocean_dist_p90), 0.0, 1.0)
-
-    moisture = (
-        0.34 * advected +
-        0.24 * ocean_moisture +
-        0.14 * river_moisture +
-        0.10 * lake_moisture +
-        0.10 * fetch +
-        0.08 * equatorial_wet
-    )
-
-    # Orography: windward uplift wetting and lee-side drying
-    moisture += 0.14 * windward
-    moisture -= rain_shadow * (0.30 + 0.27 * continentality)
-    moisture -= 0.08 * leeward
-    moisture -= 0.16 * terrain_blocking
-
-    # Elevation-driven precipitation loss
+    
+    # 5. RAIN SHADOW EFFECT
+    rain_shadow = compute_rain_shadow(elevation, is_mountain, wind_dx, wind_dy, width, height)
+    
+    # Apply rain shadow (reduce moisture on lee side of mountains)
+    shadow_reduction = 1.0 - rain_shadow * 0.75  # Up to 75% reduction
+    moisture = moisture * shadow_reduction
+    
+    # 6. ELEVATION MOISTURE LOSS
+    # Higher elevations lose moisture due to precipitation
     land_elev = elevation[is_land]
-    elev_p80 = float(np.percentile(land_elev, 80)) if len(land_elev) > 0 else 0.7
-    elev_loss = np.clip(elevation / max(0.15, elev_p80), 0.0, 1.0) * (0.17 + 0.12 * windward)
-    moisture *= (1.0 - elev_loss)
-
-    # Continental interiors dry out unless supported by rivers/lakes.
-    interior_dry = continentality * (1.0 - np.exp(-dist_river / max(6.0, river_decay * 1.4)))
-    moisture *= (1.0 - 0.16 * interior_dry)
-
-    # Global circulation belts.
-    moisture *= (1.0 - 0.27 * subtropical_dry)
-    moisture *= (1.0 - 0.10 * polar_dry)
-
-    # Mountains/hills shape local humidity gradients.
-    if dist_mountain is not None:
-        foothill_humidity = np.exp(-dist_mountain / 7.0) * np.exp(-dist_river / max(6.0, river_decay * 1.3))
-        moisture += 0.05 * foothill_humidity
-    if dist_hills is not None:
-        hill_channeling = np.exp(-dist_hills / 6.0) * np.exp(-dist_ocean / max(10.0, ocean_decay * 0.8))
-        moisture += 0.03 * hill_channeling
-
-    # Warm air can hold more moisture; very cold climates trend drier.
-    temp_capacity = 0.68 + 0.32 * temperature
-    moisture *= temp_capacity
-
-    # Forest transpiration feedback.
+    elev_p75 = np.percentile(land_elev, 75) if len(land_elev) > 0 else 0.6
+    
+    elev_loss = np.clip(elevation / elev_p75, 0, 1) * 0.25
+    moisture = moisture * (1 - elev_loss)
+    
+    # 7. SUBTROPICAL DRY BELT
+    # Hadley cell dynamics create dry zones at ~25-30 degrees latitude
+    y_coords = np.arange(height).reshape(-1, 1) / height
+    lat_from_equator = np.abs(y_coords - 0.5) * 2  # 0 at equator, 1 at poles
+    
+    # Subtropical high pressure belt
+    subtropical_center = 0.30  # ~30% from equator
+    subtropical_width = 0.12
+    subtropical_dryness = np.exp(-((lat_from_equator - subtropical_center) ** 2) / (2 * subtropical_width ** 2))
+    subtropical_factor = 1.0 - np.tile(subtropical_dryness, (1, width)) * 0.35
+    
+    moisture = moisture * subtropical_factor
+    
+    # 8. TEMPERATURE INTERACTION
+    # Warm air holds more moisture, cold air less
+    # Warm regions retain moisture, cold regions precipitate it out
+    temp_factor = 0.7 + 0.3 * temperature  # 0.7-1.0 based on temperature
+    moisture = moisture * temp_factor
+    
+    # 9. FOREST TRANSPIRATION FEEDBACK (if available)
     if forest_hint is not None:
-        forest_moisture_boost = forest_hint * (0.10 + 0.08 * np.exp(-dist_river / max(6.0, river_decay * 1.1)))
+        # Forests contribute humidity through transpiration
+        forest_moisture_boost = forest_hint * 0.15
         moisture = np.clip(moisture + forest_moisture_boost, 0, 1)
-
-    # Keep interiors from collapsing into uniform dryness while preserving desert belts.
-    climate_floor = 0.05 + 0.22 * np.exp(-dist_river / max(6.0, river_decay * 1.3)) + 0.12 * np.exp(-dist_lake / max(8.0, lake_decay * 1.4))
-    moisture = np.maximum(moisture, climate_floor * (0.40 + 0.60 * np.clip(temperature, 0.0, 1.0)))
-
+    
+    # 10. CONTINENTAL INTERIOR DRYNESS
+    # Even with wind propagation, deep interiors tend to be drier
+    continental_factor = 1.0 - np.clip(dist_ocean / ocean_dist_max, 0, 1) * 0.15
+    moisture = moisture * continental_factor
+    
     # Normalize to [0, 1] on land
-    land_moisture = moisture[is_land]
-    m_min, m_max = land_moisture.min(), land_moisture.max()
-    if m_max > m_min:
-        moisture[is_land] = (moisture[is_land] - m_min) / (m_max - m_min)
-
-    moisture = np.clip(moisture, 0.0, 1.0).astype(np.float32)
-
+    if is_land.any():
+        land_moisture = moisture[is_land]
+        m_min, m_max = land_moisture.min(), land_moisture.max()
+        if m_max > m_min:
+            moisture[is_land] = (moisture[is_land] - m_min) / (m_max - m_min)
+    
+    moisture = np.clip(moisture, 0.0, 1.0)
+    
     # Ocean tiles have full moisture
     moisture[~is_land] = 1.0
-
+    
     return moisture, (wind_dx, wind_dy), rain_shadow
 
 
@@ -4000,96 +3325,139 @@ def find_river_headwaters(flow_accum, flow_dir, elevation, is_land, is_mountain,
                     headwaters.append((y, x, flow_accum[y, x], headwater_type))
     
     # === INTERIOR RIVER SOURCES ===
-    # Add some interior river sources to ensure rivers span continents
+    # The flow accumulation model naturally biases toward edges.
+    # We need to explicitly add sources from the INTERIOR of the landmass.
+    # These will create rivers that flow from center through middle lands to ocean.
+    # KEY INSIGHT: Don't rely on dist_ocean - instead find tiles with LONG actual drainage paths
     if dist_ocean is not None:
+        # Find tiles with long drainage paths that reach ocean
         interior_candidates = []
-        min_path_length = 12
-        # Allow deeper continental traces; fixed 100 steps misses long inland paths.
-        max_trace_steps = max(width, height)
         
-        for y in range(height):
-            for x in range(width):
-                if is_mountain[y, x]:
+        # We want sources with paths >= 12 tiles to ocean
+        # But for very deep interior (d_ocean >= 20), we accept shorter paths
+        min_path_length = 12
+        deep_min_path_length = 8  # Shorter requirement for d_ocean >= 20
+        
+        # NO elevation restriction - we want sources from wherever can drain
+        # Sample tiles efficiently (check every 2nd tile for coverage)
+        sample_rate = 2
+        
+        for y in range(0, height, sample_rate):
+            for x in range(0, width, sample_rate):
+                if not is_land[y, x]:
                     continue
+                if is_mountain[y, x]:
+                    continue  # Mountains already create headwaters
+                    
+                # Must have valid flow direction
                 if flow_dir[y, x] < 0:
                     continue
                 
-                elev = elevation[y, x]
+                # Debug: track a deep interior tile
+                debug_tile = (dist_ocean[y, x] >= 25)
                 
-                # Trace downstream to check path length to ocean
+                # Trace downstream to see how long the path to ocean is
                 path_length = 0
                 ty, tx = y, x
                 visited = set()
+                failure_reason = ""
                 
-                for _ in range(max_trace_steps):
+                for _ in range(100):  # Max 100 tiles
                     if (ty, tx) in visited:
+                        failure_reason = "loop"
                         break
                     visited.add((ty, tx))
                     path_length += 1
                     
-                    if not is_land[ty, tx]:
+                    if not is_land[ty, tx]:  # Reached ocean
+                        # This tile has a path to ocean!
                         break
-                        
+                    
                     dir_idx = flow_dir[ty, tx]
                     if dir_idx < 0:
-                        path_length = 0
+                        failure_reason = "basin"
+                        path_length = 0  # Ends in basin - not useful
                         break
-                        
+                    
                     dy, dx = D8_DIRECTIONS[dir_idx]
                     ty, tx = ty + dy, tx + dx
                     if not (0 <= ty < height and 0 <= tx < width):
+                        failure_reason = "bounds"
                         path_length = 0
                         break
                 
-                # Found a candidate with long path to ocean
-                if path_length >= min_path_length and is_land[ty, tx] == False:
-                    score = path_length + dist_ocean[y, x] * 0.5
-                    interior_candidates.append((y, x, score, path_length, dist_ocean[y, x], elev))
+                # NOTE: Debug output for deep tiles disabled for cleaner output
+                # Uncomment below to debug interior source detection issues
+                # if debug_tile and hasattr(find_river_headwaters, 'debug_count'):
+                #     ... (deep tile debugging code)
+                
+                # CRITICAL: Verify path actually reached ocean (not just long)
+                # Check if the last tile in the trace is ocean
+                reached_ocean = False
+                if path_length >= min_path_length:
+                    # Walk the path again to check the ending
+                    ty, tx = y, x
+                    visited = set()
+                    for _ in range(path_length + 5):
+                        if (ty, tx) in visited:
+                            break
+                        visited.add((ty, tx))
+                        if not is_land[ty, tx]:
+                            reached_ocean = True
+                            break
+                        dir_idx = flow_dir[ty, tx]
+                        if dir_idx < 0:
+                            break
+                        dy, dx = D8_DIRECTIONS[dir_idx]
+                        ty, tx = ty + dy, tx + dx
+                        if not (0 <= ty < height and 0 <= tx < width):
+                            break
+                
+                if path_length >= min_path_length and reached_ocean:
+                    # Found a good interior source!
+                    d_ocean = dist_ocean[y, x]
+                    score = path_length + d_ocean * 0.5 + elev * 10
+                    interior_candidates.append((y, x, score, path_length, d_ocean, elev))
+                elif path_length >= deep_min_path_length and reached_ocean and dist_ocean[y, x] >= 20:
+                    # Deep interior can use shorter path requirement
+                    d_ocean = dist_ocean[y, x]
+                    score = path_length + d_ocean * 0.5 + elev * 10
+                    interior_candidates.append((y, x, score, path_length, d_ocean, elev))
         
-        # Sort by distance from ocean (prioritize deep interior)
-        interior_candidates.sort(key=lambda c: (-c[4], -c[3]))
+        # Sort by score (highest first = best interior sources)
+        # Prioritize by d_ocean first, then path length
+        interior_candidates.sort(key=lambda c: (-c[4], -c[3]))  # Sort by d_ocean desc, then path_len desc
+        
+        # Debug: Show top candidate info (disabled for cleaner output)
+        # print(f"    Interior source search: found {len(interior_candidates)} candidates")
+        # if len(interior_candidates) > 0:
+        #     print(f"    Top 5 candidates:")
+        #     for i, (y, x, score, path_len, d_oc, elev) in enumerate(interior_candidates[:5]):
+        #         print(f"      ({y},{x}): path_len={path_len}, d_ocean={d_oc:.0f}")
         
         # Add top interior candidates as new headwaters
         existing_headwater_positions = {(h[0], h[1]) for h in headwaters}
         added_interior = 0
-        target_interior = 12
+        target_interior = 12  # Add up to 12 interior river sources
         
         for y, x, score, path_len, d_ocean, elev in interior_candidates:
             if added_interior >= target_interior:
                 break
+                
             if (y, x) in existing_headwater_positions:
                 continue
+                
+            # Check spacing from existing headwaters - NO spacing check as these are valuable
+            # Just check we're not exactly on an existing headwater
             
-            # Add as interior source
-            priority_flow = threshold * 5 + path_len * 10
+            # Path length already verified during candidate search
+            # Add as interior source with VERY HIGH priority
+            priority_flow = threshold * 5 + path_len * 10  # Prioritize by path length
             headwaters.append((y, x, priority_flow, 'interior_source'))
             existing_headwater_positions.add((y, x))
             added_interior += 1
         
-        if added_interior > 0:
-            print(f"    Added {added_interior} interior source headwaters")
-    
-    # === ENFORCE INLAND-ONLY constraint ===
-    # Hard filter: Remove headwaters too close to coasts
-    # This ensures clean river generation in the middle lands only
-    if dist_ocean is not None:
-        MIN_COAST_DISTANCE = 14  # Must be at least 14 tiles from ocean edge
-        
-        filtered_headwaters = []
-        removed_count = 0
-        
-        for y, x, flow, htype in headwaters:
-            # Check distance from coast
-            if dist_ocean[y, x] < MIN_COAST_DISTANCE:
-                removed_count += 1
-                continue
-            
-            # Passed all filters
-            filtered_headwaters.append((y, x, flow, htype))
-        
-        headwaters = filtered_headwaters
-        if removed_count > 0:
-            print(f"    Removed {removed_count} coastal/lake-edge headwaters")
+        print(f"    Added {added_interior} interior source headwaters")
     
     # Sort by flow/priority (highest first = main rivers)
     headwaters.sort(key=lambda h: -h[2])
@@ -4176,139 +3544,7 @@ def trace_river_upstream(start_y, start_x, flow_dir, elevation, is_land, is_moun
     return path
 
 
-def _coord_noise_01(y, x, seed=0, salt=0):
-    """Deterministic coordinate noise in [0, 1] for stable tie-breaking."""
-    h = (
-        int(y) * 374761393 +
-        int(x) * 668265263 +
-        int(seed) * 2246822519 +
-        int(salt) * 3266489917
-    ) & 0xFFFFFFFF
-    h = (h ^ (h >> 13)) & 0xFFFFFFFF
-    h = (h * 1274126177) & 0xFFFFFFFF
-    return float(h & 0xFFFF) / 65535.0
-
-
-def _update_direction_run(prev_step, straight_run, next_step):
-    """Track repeated move direction for anti-straight-line routing penalties."""
-    if next_step is None:
-        return None, 0
-    if prev_step is not None and next_step == prev_step:
-        return next_step, min(straight_run + 1, 12)
-    return next_step, 1
-
-
-def _should_force_meander(y, x, ny, nx, dist_ocean, elevation, straight_run, step_idx):
-    """Decide when to bend long straight river runs in low-slope coastal plains."""
-    if dist_ocean is None or elevation is None:
-        return False
-    if straight_run < RIVER_MEANDER_STRAIGHT_RUN_TRIGGER:
-        return False
-    if dist_ocean[y, x] > RIVER_MEANDER_COAST_DIST:
-        return False
-
-    # Hard guard against very long ruler-straight coastal tails.
-    if straight_run >= (RIVER_MEANDER_STRAIGHT_RUN_TRIGGER + 2):
-        return True
-
-    drop = float(elevation[y, x] - elevation[ny, nx])
-    if drop > RIVER_MEANDER_MAX_DROP:
-        return False
-    trigger_noise = _coord_noise_01(y, x, seed=step_idx, salt=97)
-    return trigger_noise < RIVER_MEANDER_TRIGGER_CHANCE
-
-
-def _choose_guided_downstream_step(y, x, visited, is_land, width, height,
-                                   dist_ocean=None, elevation=None,
-                                   prev_step=None, straight_run=0, step_idx=0,
-                                   prefer_river_mask=None,
-                                   max_away_from_coast=RIVER_COAST_GUIDE_MAX_AWAY):
-    """
-    Choose a fallback downstream step that still trends seaward, but avoids
-    long ruler-straight tails in flat coastal regions.
-    """
-    current_dist = dist_ocean[y, x] if dist_ocean is not None else None
-    current_elev = elevation[y, x] if elevation is not None else 0.0
-
-    candidates = []
-
-    for di, (dy, dx) in enumerate(D8_DIRECTIONS):
-        ny, nx = y + dy, x + dx
-        if not (0 <= ny < height and 0 <= nx < width):
-            continue
-        if (ny, nx) in visited:
-            continue
-
-        # Direct ocean exit is always valid.
-        if not is_land[ny, nx]:
-            _, new_run = _update_direction_run(prev_step, straight_run, (dy, dx))
-            return (ny, nx), True, (dy, dx), new_run
-
-        if current_dist is not None and dist_ocean is not None:
-            if dist_ocean[ny, nx] > current_dist + max_away_from_coast:
-                continue
-
-        # Avoid immediate reverse-turns in fallback routing.
-        if prev_step is not None and (dy, dx) == (-prev_step[0], -prev_step[1]):
-            continue
-
-        neighbor_dist = dist_ocean[ny, nx] if dist_ocean is not None else 0.0
-        neighbor_elev = elevation[ny, nx] if elevation is not None else 0.0
-        uphill = max(0.0, float(neighbor_elev - current_elev))
-        away_penalty = 0.0
-        if current_dist is not None and dist_ocean is not None:
-            away_penalty = max(0.0, float(neighbor_dist - current_dist))
-
-        straight_penalty = 0.0
-        if prev_step is not None and (dy, dx) == prev_step:
-            coast_focus = 0.35
-            if current_dist is not None:
-                coast_focus += 0.9 * np.clip((14.0 - current_dist) / 14.0, 0.0, 1.0)
-            straight_penalty = min(
-                RIVER_COAST_STRAIGHT_PENALTY_MAX,
-                RIVER_COAST_STRAIGHT_PENALTY * (1.0 + 0.22 * straight_run) * coast_focus
-            )
-            if (current_dist is not None and
-                    current_dist <= RIVER_MEANDER_COAST_DIST and
-                    straight_run >= RIVER_MEANDER_STRAIGHT_RUN_TRIGGER):
-                straight_penalty += 0.35
-
-        river_bonus = -0.08 if (prefer_river_mask is not None and prefer_river_mask[ny, nx]) else 0.0
-        jitter = (_coord_noise_01(ny, nx, seed=step_idx + di * 17, salt=41) - 0.5) * RIVER_COAST_JITTER
-
-        score = (
-            float(neighbor_dist) * 1.28 +
-            float(neighbor_elev) * 0.30 +
-            uphill * 4.2 +
-            away_penalty * 2.1 +
-            straight_penalty +
-            river_bonus +
-            jitter
-        )
-
-        candidates.append((score, ny, nx, (dy, dx)))
-
-    if not candidates:
-        return None, False, None, 0
-
-    # When a fallback tail has been straight for too long near coast,
-    # force a gentle bend if a viable alternative exists.
-    if (prev_step is not None and
-            current_dist is not None and
-            current_dist <= RIVER_MEANDER_COAST_DIST and
-            straight_run >= (RIVER_MEANDER_STRAIGHT_RUN_TRIGGER + 2)):
-        turning_candidates = [c for c in candidates if c[3] != prev_step]
-        if turning_candidates:
-            candidates = turning_candidates
-
-    _, ny, nx, best_step = min(candidates, key=lambda item: item[0])
-    best_next = (ny, nx)
-    _, new_run = _update_direction_run(prev_step, straight_run, best_step)
-    return best_next, False, best_step, new_run
-
-
-def trace_river_to_ocean(start_y, start_x, flow_dir, is_land, width, height, max_length=900,
-                         is_lake=None, is_river=None, elevation=None, dist_ocean=None):
+def trace_river_to_ocean(start_y, start_x, flow_dir, is_land, width, height, max_length=500, is_lake=None, is_river=None):
     """
     Trace a river from headwater to ocean following flow direction.
     
@@ -4321,8 +3557,6 @@ def trace_river_to_ocean(start_y, start_x, flow_dir, is_land, width, height, max
     path = []
     y, x = start_y, start_x
     visited = set()
-    prev_step = None
-    straight_run = 0
     
     for _ in range(max_length):
         if (y, x) in visited:
@@ -4354,7 +3588,6 @@ def trace_river_to_ocean(start_y, start_x, flow_dir, is_land, width, height, max
                         (ny, nx) not in visited and
                         is_river[ny, nx] and is_land[ny, nx] and
                         flow_dir[ny, nx] >= 0):
-                        prev_step, straight_run = _update_direction_run(prev_step, straight_run, (dy, dx))
                         y, x = ny, nx
                         found_continuation = True
                         break
@@ -4373,7 +3606,6 @@ def trace_river_to_ocean(start_y, start_x, flow_dir, is_land, width, height, max
                                 oy, ox = ny + dy2, nx + dx2
                                 if (0 <= oy < height and 0 <= ox < width and
                                     not is_land[oy, ox]):
-                                    prev_step, straight_run = _update_direction_run(prev_step, straight_run, (dy, dx))
                                     y, x = ny, nx
                                     found_continuation = True
                                     break
@@ -4382,22 +3614,15 @@ def trace_river_to_ocean(start_y, start_x, flow_dir, is_land, width, height, max
             
             if found_continuation:
                 continue
-
-            next_cell, hits_ocean, move_step, new_run = _choose_guided_downstream_step(
-                y, x, visited, is_land, width, height,
-                dist_ocean=dist_ocean, elevation=elevation,
-                prev_step=prev_step, straight_run=straight_run, step_idx=len(path),
-                prefer_river_mask=is_river
-            )
-
-            if next_cell is not None:
-                if hits_ocean:
-                    path.append(next_cell)
+            
+            # Check if current tile is adjacent to ocean
+            for di in range(8):
+                dy, dx = D8_DIRECTIONS[di]
+                ny, nx = y + dy, x + dx
+                if (0 <= ny < height and 0 <= nx < width and
+                    not is_land[ny, nx]):
+                    path.append((ny, nx))
                     return path
-                y, x = next_cell
-                prev_step = move_step
-                straight_run = new_run
-                continue
             
             break  # No flow direction and no continuation found
         
@@ -4406,28 +3631,12 @@ def trace_river_to_ocean(start_y, start_x, flow_dir, is_land, width, height, max
         
         if not (0 <= ny < height and 0 <= nx < width):
             break
-
-        # In low-slope coastal plains, gently bend very long straight runs.
-        if _should_force_meander(y, x, ny, nx, dist_ocean, elevation, straight_run, len(path)):
-            alt_cell, alt_hits_ocean, alt_step, _ = _choose_guided_downstream_step(
-                y, x, visited, is_land, width, height,
-                dist_ocean=dist_ocean, elevation=elevation,
-                prev_step=prev_step, straight_run=straight_run, step_idx=len(path),
-                prefer_river_mask=is_river, max_away_from_coast=1.3
-            )
-            if alt_cell is not None and alt_step is not None and alt_step != (dy, dx):
-                if alt_hits_ocean:
-                    path.append(alt_cell)
-                    return path
-                ny, nx = alt_cell
-                dy, dx = alt_step
         
         # If next tile is ocean, add it and stop
         if not is_land[ny, nx]:
             path.append((ny, nx))
             break
         
-        prev_step, straight_run = _update_direction_run(prev_step, straight_run, (dy, dx))
         y, x = ny, nx
     
     return path
@@ -4483,8 +3692,7 @@ def compute_ocean_reachability(is_river, is_land, width, height):
     return reaches_ocean
 
 
-def extend_river_to_ocean(path, is_river, is_land, reaches_ocean, flow_dir, width, height,
-                          max_extension=320, elevation=None, dist_ocean=None):
+def extend_river_to_ocean(path, is_river, is_land, reaches_ocean, flow_dir, width, height, max_extension=200):
     """
     Extend a river path that ends in land by following connected river tiles toward ocean.
     
@@ -4514,22 +3722,12 @@ def extend_river_to_ocean(path, is_river, is_land, reaches_ocean, flow_dir, widt
                 found = True
                 break
         if not found:
-            # No connected river nearby: we'll attempt a guided route toward the coast.
-            # This preserves interior rivers while enforcing ocean connectivity.
-            if dist_ocean is None:
-                return path
+            return path  # No ocean-reaching river adjacent
     
     # Now follow river tiles toward ocean using flow direction
     visited = set(path)
     extension = []
     y, x = last_y, last_x
-    prev_step = None
-    straight_run = 0
-    if len(path) >= 2:
-        py, px = path[-2]
-        dy0, dx0 = y - py, x - px
-        if -1 <= dy0 <= 1 and -1 <= dx0 <= 1 and not (dy0 == 0 and dx0 == 0):
-            prev_step, straight_run = _update_direction_run(None, 0, (dy0, dx0))
     
     for _ in range(max_extension):
         # Check if we reached ocean (adjacent to ocean tile)
@@ -4556,7 +3754,6 @@ def extend_river_to_ocean(path, is_river, is_land, reaches_ocean, flow_dir, widt
                     return path + extension
                 
                 if is_river[ny, nx] and reaches_ocean[ny, nx]:
-                    prev_step, straight_run = _update_direction_run(prev_step, straight_run, (dy, dx))
                     visited.add((ny, nx))
                     extension.append((ny, nx))
                     y, x = ny, nx
@@ -4571,7 +3768,6 @@ def extend_river_to_ocean(path, is_river, is_land, reaches_ocean, flow_dir, widt
                 (ny, nx) not in visited and
                 is_river[ny, nx] and is_land[ny, nx] and
                 reaches_ocean[ny, nx]):
-                prev_step, straight_run = _update_direction_run(prev_step, straight_run, (dy, dx))
                 visited.add((ny, nx))
                 extension.append((ny, nx))
                 y, x = ny, nx
@@ -4579,27 +3775,6 @@ def extend_river_to_ocean(path, is_river, is_land, reaches_ocean, flow_dir, widt
                 break
         
         if not found_next:
-            # Last resort: guided carve toward coast using distance/elevation.
-            # Preference: move seaward, avoid steep uphill steps.
-            next_cell, hits_ocean, move_step, new_run = _choose_guided_downstream_step(
-                y, x, visited, is_land, width, height,
-                dist_ocean=dist_ocean, elevation=elevation,
-                prev_step=prev_step, straight_run=straight_run, step_idx=len(path) + len(extension),
-                prefer_river_mask=is_river
-            )
-
-            if next_cell is not None:
-                if hits_ocean:
-                    extension.append(next_cell)
-                    return path + extension
-                ny, nx = next_cell
-                visited.add((ny, nx))
-                extension.append((ny, nx))
-                y, x = ny, nx
-                prev_step = move_step
-                straight_run = new_run
-                continue
-
             break  # Dead end
     
     return path + extension
@@ -4659,8 +3834,7 @@ def create_river_from_accumulation(flow_accum, flow_dir, elevation, is_land, is_
         
         # Trace downstream to ocean (pass is_river to allow merging with existing rivers)
         downstream_path = trace_river_to_ocean(hy, hx, flow_dir, is_land, width, height, 
-                                               is_lake=is_lake, is_river=is_river,
-                                               elevation=elevation, dist_ocean=dist_ocean)
+                                               is_lake=is_lake, is_river=is_river)
         
         # Combine: upstream (reversed) + downstream
         full_path = list(reversed(upstream_path)) + downstream_path
@@ -4679,7 +3853,6 @@ def create_river_from_accumulation(flow_accum, flow_dir, elevation, is_land, is_
                 reaches_destination = True
                 break
         
-        allow_inland_standalone = False
         if not reaches_destination:
             # Check if it would connect to an existing river
             can_merge = False
@@ -4688,16 +3861,7 @@ def create_river_from_accumulation(flow_accum, flow_dir, elevation, is_land, is_
                     can_merge = True
                     break
             if not can_merge:
-                # Preserve a few long deep-interior systems so continents don't
-                # become hydrologically empty in the middle.
-                if dist_ocean is not None:
-                    min_inland_len = max(MIN_RIVER_SYSTEM_LENGTH * 3, 18)
-                    allow_inland_standalone = (
-                        dist_ocean[hy, hx] >= INTERIOR_RIVER_DIST_THRESHOLD and
-                        len(full_path) >= min_inland_len
-                    )
-                if not allow_inland_standalone:
-                    continue  # River goes nowhere
+                continue  # River goes nowhere
         
         # Calculate max flow in this river path
         max_flow = max(flow_accum[py, px] for py, px in full_path if is_land[py, px])
@@ -4730,18 +3894,14 @@ def create_river_from_accumulation(flow_accum, flow_dir, elevation, is_land, is_
     
     # Sort by a score combining length and max_flow (favor longer, bigger rivers)
     for r in potential_rivers:
-        length_bonus = float(r['length']) ** 1.75
-        inland_bonus = 1.18 if not r['reaches_ocean'] else 1.0
-        dist_ocean_bonus = 1.0 + (r['headwater_dist_ocean'] / 14.0)
+        # Heavily reward longer rivers - exponential bonus for length
+        length_bonus = r['length'] ** 1.5  # Exponential bonus for longer rivers
+        inland_bonus = 1.5 if not r['reaches_ocean'] else 1.0  # Bonus for inland rivers
+        # IMPORTANT: Strong bonus for headwaters far from ocean (creates rivers through middle lands)
+        dist_ocean_bonus = 1.0 + (r['headwater_dist_ocean'] / 15.0)  # Stronger bonus scales with distance
+        # Extra bonus for interior_source type (these are our priority rivers)
         source_type_bonus = 2.0 if r['hw_type'] == 'interior_source' else 1.0
-        connectivity_bonus = 1.35 if r['reaches_ocean'] else 0.95
-        long_bonus = 1.0
-        if r['length'] >= LONG_RIVER_FORCE_LENGTH:
-            long_bonus += min(0.9, (r['length'] - LONG_RIVER_FORCE_LENGTH) / max(20.0, LONG_RIVER_FORCE_LENGTH))
-        r['score'] = (
-            length_bonus * inland_bonus * dist_ocean_bonus * source_type_bonus *
-            connectivity_bonus * long_bonus + r['max_flow'] * 0.25
-        )
+        r['score'] = length_bonus * 2 * inland_bonus * dist_ocean_bonus * source_type_bonus + r['max_flow'] * 0.1
     potential_rivers.sort(key=lambda r: -r['score'])
     
     # Keep track of how many rivers we've accepted and their headwater positions
@@ -4749,7 +3909,6 @@ def create_river_from_accumulation(flow_accum, flow_dir, elevation, is_land, is_
     inland_river_count = 0
     target_max_rivers = TARGET_MAX_RIVERS  # Target fewer, longer rivers
     accepted_headwaters = []  # List of (y, x) for spacing check
-    accepted_headwater_set = set()
     
     # Determine how many inland rivers to allow (probability-based)
     rng_inland = np.random.default_rng((seed or 0) + 9999)
@@ -4757,11 +3916,6 @@ def create_river_from_accumulation(flow_accum, flow_dir, elevation, is_land, is_
         target_inland_rivers = rng_inland.integers(2, 5)  # 2-4 inland rivers
     else:
         target_inland_rivers = 1  # Always allow at least 1 inland river
-    interior_land_tiles = 0
-    if dist_ocean is not None:
-        interior_land_tiles = int((is_land & (dist_ocean >= INTERIOR_RIVER_DIST_THRESHOLD)).sum())
-        interior_target = max(2, min(8, interior_land_tiles // 6000))
-        target_inland_rivers = max(target_inland_rivers, interior_target)
     
     def headwater_too_close(hy, hx):
         """Check if a headwater is too close to existing accepted headwaters."""
@@ -4770,73 +3924,10 @@ def create_river_from_accumulation(flow_accum, flow_dir, elevation, is_land, is_
             if dist < MIN_HEADWATER_SPACING:
                 return True
         return False
-
-    # Reserve a few long inland-origin trunk rivers so maps can have
-    # continent-crossing systems with tributaries feeding into them.
-    if potential_rivers:
-        if dist_ocean is not None:
-            target_trunks = max(
-                LONG_RIVER_MIN_TRUNKS,
-                min(LONG_RIVER_MAX_TRUNKS, 1 + interior_land_tiles // 9000)
-            )
-        else:
-            target_trunks = LONG_RIVER_MIN_TRUNKS
-
-        trunk_candidates = []
-        for r in potential_rivers:
-            if not r['reaches_ocean']:
-                continue
-            if r['length'] < LONG_RIVER_FORCE_LENGTH:
-                continue
-            if r['headwater_dist_ocean'] < LONG_RIVER_FORCE_DIST_OCEAN:
-                continue
-            trunk_candidates.append(r)
-
-        trunk_candidates.sort(key=lambda r: (-r['length'], -r['score']))
-        long_trunks_added = 0
-        for river_data in trunk_candidates:
-            hy, hx = river_data['headwater']
-            too_close = False
-            for ay, ax in accepted_headwaters:
-                if np.sqrt((hy - ay) ** 2 + (hx - ax) ** 2) < (MIN_HEADWATER_SPACING * 0.45):
-                    too_close = True
-                    break
-            if too_close:
-                continue
-
-            consolidated_rivers.append(river_data)
-            accepted_headwaters.append((hy, hx))
-            accepted_headwater_set.add((hy, hx))
-            accepted_count += 1
-            headwater_types[(hy, hx)] = river_data['hw_type']
-
-            for py, px in river_data['path']:
-                if is_land[py, px]:
-                    is_river[py, px] = True
-                    river_map[py, px] = flow_accum[py, px]
-
-            long_trunks_added += 1
-            if long_trunks_added >= target_trunks:
-                break
-
-        if long_trunks_added > 0:
-            print(f"    Reserved {long_trunks_added} long continental trunk rivers")
     
     for river_data in potential_rivers:
         path = river_data['path']
         hy, hx = river_data['headwater']
-        is_inland_river = not river_data['reaches_ocean']
-
-        if (hy, hx) in accepted_headwater_set:
-            continue
-
-        # Apply inland system limits globally (standalone + tributaries) to
-        # avoid clutter while still supporting continental interior rivers.
-        if is_inland_river:
-            if river_data['length'] < max(MIN_RIVER_SYSTEM_LENGTH * 3, 18):
-                continue
-            if inland_river_count >= target_inland_rivers:
-                continue
         
         # Check if this river connects to an already-accepted river
         connects_to_larger = False
@@ -4869,6 +3960,13 @@ def create_river_from_accumulation(flow_accum, flow_dir, elevation, is_land, is_
             # For standalone rivers, apply other strict filtering
             if river_data['length'] < MIN_RIVER_SYSTEM_LENGTH:
                 continue  # Skip short standalone rivers
+            elif not river_data['reaches_ocean']:
+                # Non-ocean-reaching rivers (inland) need special handling
+                if inland_river_count >= target_inland_rivers:
+                    continue  # Already have enough inland rivers
+                if river_data['length'] < MIN_RIVER_SYSTEM_LENGTH * 1.5:
+                    continue  # Inland rivers need to be longer (12+ tiles)
+                inland_river_count += 1  # Count this as an inland river
             # Limit total number of standalone rivers
             elif accepted_count >= target_max_rivers:
                 # Only accept exceptionally long rivers beyond the limit
@@ -4878,9 +3976,6 @@ def create_river_from_accumulation(flow_accum, flow_dir, elevation, is_land, is_
         # Accept this river
         consolidated_rivers.append(river_data)
         accepted_headwaters.append((hy, hx))
-        accepted_headwater_set.add((hy, hx))
-        if is_inland_river:
-            inland_river_count += 1
         if not connects_to_larger:
             accepted_count += 1
         
@@ -4892,100 +3987,6 @@ def create_river_from_accumulation(flow_accum, flow_dir, elevation, is_land, is_
         
         # Store headwater type
         headwater_types[(hy, hx)] = river_data['hw_type']
-
-    # SECOND PASS: Ensure deep interior gets enough river coverage.
-    # This runs only when inland river coverage is sparse and adds a small number
-    # of long, spaced interior candidates to keep networks natural and life-giving.
-    if dist_ocean is not None and potential_rivers:
-        interior_land_mask = is_land & (dist_ocean >= INTERIOR_RIVER_DIST_THRESHOLD)
-        interior_land_tiles = int(interior_land_mask.sum())
-
-        if interior_land_tiles > 0:
-            interior_river_tiles = int((is_river & interior_land_mask).sum())
-            interior_coverage = interior_river_tiles / max(1, interior_land_tiles)
-            interior_system_count = sum(
-                1 for r in consolidated_rivers
-                if r['headwater_dist_ocean'] >= INTERIOR_RIVER_DIST_THRESHOLD
-            )
-
-            target_interior_systems = max(
-                2,
-                min(6, int(round(interior_land_tiles / 5000.0)))
-            )
-
-            if (interior_coverage < MIN_INTERIOR_RIVER_COVERAGE or
-                    interior_system_count < target_interior_systems):
-                interior_candidates = []
-
-                for r in potential_rivers:
-                    hy, hx = r['headwater']
-                    if (hy, hx) in accepted_headwater_set:
-                        continue
-                    if r['headwater_dist_ocean'] < (INTERIOR_RIVER_DIST_THRESHOLD - 2):
-                        continue
-                    if r['length'] < max(MIN_RIVER_SYSTEM_LENGTH * 2, 14):
-                        continue
-
-                    new_interior_tiles = 0
-                    for py, px in r['path']:
-                        if (is_land[py, px] and interior_land_mask[py, px] and
-                                not is_river[py, px]):
-                            new_interior_tiles += 1
-
-                    if new_interior_tiles < INTERIOR_RIVER_MIN_NEW_TILES:
-                        continue
-
-                    connectivity_bonus = 20.0 if r['reaches_ocean'] else 0.0
-                    candidate_score = (
-                        new_interior_tiles * 3.0 +
-                        r['length'] * 0.9 +
-                        r['headwater_dist_ocean'] * 1.2 +
-                        connectivity_bonus
-                    )
-                    interior_candidates.append((candidate_score, new_interior_tiles, r))
-
-                interior_candidates.sort(key=lambda item: (-item[0], -item[1]))
-                max_additions = min(
-                    MAX_INTERIOR_RIVER_ADDITIONS,
-                    max(0, (target_max_rivers + 8) - len(consolidated_rivers))
-                )
-                added_interior_rivers = 0
-
-                for _, new_tiles, river_data in interior_candidates:
-                    if added_interior_rivers >= max_additions:
-                        break
-                    if (interior_coverage >= MIN_INTERIOR_RIVER_COVERAGE and
-                            interior_system_count >= target_interior_systems):
-                        break
-
-                    hy, hx = river_data['headwater']
-                    too_close = False
-                    for ay, ax in accepted_headwaters:
-                        dist = np.sqrt((hy - ay) ** 2 + (hx - ax) ** 2)
-                        if dist < (MIN_HEADWATER_SPACING * 0.55):
-                            too_close = True
-                            break
-                    if too_close:
-                        continue
-
-                    consolidated_rivers.append(river_data)
-                    accepted_headwaters.append((hy, hx))
-                    accepted_headwater_set.add((hy, hx))
-                    headwater_types[(hy, hx)] = river_data['hw_type']
-
-                    for py, px in river_data['path']:
-                        if is_land[py, px]:
-                            is_river[py, px] = True
-                            river_map[py, px] = flow_accum[py, px]
-
-                    interior_river_tiles += new_tiles
-                    interior_coverage = interior_river_tiles / max(1, interior_land_tiles)
-                    if river_data['headwater_dist_ocean'] >= INTERIOR_RIVER_DIST_THRESHOLD:
-                        interior_system_count += 1
-                    added_interior_rivers += 1
-
-                if added_interior_rivers > 0:
-                    print(f"    Added {added_interior_rivers} extra interior rivers for continental coverage")
     
     # Debug: interior_source stats (disabled for cleaner output)
     # interior_consolidated = sum(1 for r in consolidated_rivers if r['hw_type'] == 'interior_source')
@@ -5007,8 +4008,7 @@ def create_river_from_accumulation(flow_accum, flow_dir, elevation, is_land, is_
         # Try to extend this river using flow direction
         original_len = len(path)
         extended_path = extend_river_to_ocean(
-            path, is_river, is_land, reaches_ocean, flow_dir, width, height,
-            elevation=elevation, dist_ocean=dist_ocean
+            path, is_river, is_land, reaches_ocean, flow_dir, width, height
         )
         
         if len(extended_path) > original_len:
@@ -5024,75 +4024,10 @@ def create_river_from_accumulation(flow_accum, flow_dir, elevation, is_land, is_
     
     if extended_count > 0:
         print(f"    Extended {extended_count} rivers to reach ocean")
-
-    # Final connectivity cleanup: keep only river systems that can reach ocean
-    # (directly or through connected tributary network).
-    final_reaches_ocean = compute_ocean_reachability(is_river, is_land, width, height)
-    connected_rivers = []
-    removed_disconnected = 0
-
-    for river_data in consolidated_rivers:
-        path = river_data['path']
-        reaches_ocean_network = False
-        for py, px in path:
-            if not (0 <= py < height and 0 <= px < width):
-                continue
-            if not is_land[py, px]:
-                reaches_ocean_network = True
-                break
-            if final_reaches_ocean[py, px]:
-                reaches_ocean_network = True
-                break
-        if reaches_ocean_network:
-            connected_rivers.append(river_data)
-        else:
-            removed_disconnected += 1
-
-    if removed_disconnected > 0:
-        consolidated_rivers = connected_rivers
-
-        # Rebuild masks from kept rivers to avoid rendering inland dead-end systems.
-        is_river.fill(False)
-        river_map.fill(0.0)
-        kept_headwaters = set()
-        for river_data in consolidated_rivers:
-            hy, hx = river_data['headwater']
-            kept_headwaters.add((hy, hx))
-            for py, px in river_data['path']:
-                if 0 <= py < height and 0 <= px < width and is_land[py, px]:
-                    is_river[py, px] = True
-                    river_map[py, px] = flow_accum[py, px]
-
-        headwater_types = {k: v for k, v in headwater_types.items() if k in kept_headwaters}
-        print(f"    Removed {removed_disconnected} inland dead-end rivers (ocean-connected only)")
-
-    # Safety pass: remove any stray river tiles that are not ocean-reachable.
-    # This catches rare artifacts (for example tiny looped fragments).
-    strict_reaches_ocean = compute_ocean_reachability(is_river, is_land, width, height)
-    stray_mask = is_river & is_land & ~strict_reaches_ocean
-    stray_count = int(stray_mask.sum())
-    if stray_count > 0:
-        is_river[stray_mask] = False
-        river_map[stray_mask] = 0.0
-        print(f"    Pruned {stray_count} stray non-ocean river tiles")
     
     # Build river paths list and assign hierarchy
     for river_data in consolidated_rivers:
         path = river_data['path']
-
-        # Keep only active river tiles (and optional terminal ocean tile) in path.
-        filtered_path = []
-        for py, px in path:
-            if not (0 <= py < height and 0 <= px < width):
-                continue
-            if not is_land[py, px]:
-                filtered_path.append((py, px))
-            elif is_river[py, px]:
-                filtered_path.append((py, px))
-        if len(filtered_path) < RIVER_MIN_LENGTH:
-            continue
-        river_data['path'] = filtered_path
-        path = filtered_path
         river_paths.append(path)
         
         # Assign hierarchy based on flow accumulation at each tile
@@ -5281,13 +4216,18 @@ def validate_river_network(is_river, river_ids, flow_dir, flow_accum, is_land, w
             elif not is_river[ny, nx]:
                 endpoints.append((y, x))
     
-    # Check each endpoint against full connectivity (not just local flow_dir).
-    reaches_ocean_mask = compute_ocean_reachability(is_river, is_land, width, height)
+    # Check each endpoint
     for ey, ex in endpoints:
-        if reaches_ocean_mask[ey, ex]:
-            stats['rivers_to_ocean'] += 1
-        else:
-            stats['rivers_to_inland'] += 1
+        dir_idx = flow_dir[ey, ex]
+        if dir_idx >= 0:
+            dy, dx = D8_DIRECTIONS[dir_idx]
+            ny, nx = ey + dy, ex + dx
+            if 0 <= ny < height and 0 <= nx < width:
+                if not is_land[ny, nx]:
+                    stats['rivers_to_ocean'] += 1
+                    continue
+        
+        stats['rivers_to_inland'] += 1
     
     # Check for flow decreasing downstream (should not happen)
     for y in range(height):
@@ -5324,150 +4264,13 @@ def count_river_segments(river_ids, is_river):
     return sorted(segment_lengths, reverse=True)
 
 
-def recompute_river_moisture_intensity(river_paths, is_river, is_land, river_map,
-                                       temperature, dist_lake, seed=0, headwater_types=None):
-    """
-    Build dynamic river moisture intensity.
-
-    Intensity model drivers:
-    - Source strength (deterministic random per headwater/source)
-    - Tributary joins (confluence amplification)
-    - Upstream temperature memory (warmer chains lose intensity)
-    - Lake proximity (near-lake rivers retain/boost intensity)
-    - Flow accumulation magnitude (larger channels emit more moisture)
-    """
-    height, width = is_river.shape
-    intensity = np.zeros((height, width), dtype=np.float32)
-    river_land = is_river & is_land
-    if not river_land.any():
-        return intensity
-
-    flow_signal = np.zeros((height, width), dtype=np.float32)
-    thermal_signal = np.zeros((height, width), dtype=np.float32)
-    contributor_count = np.zeros((height, width), dtype=np.int16)
-
-    type_strength = {
-        'mountain': 1.14,
-        'highland': 1.05,
-        'interior_highland': 1.00,
-        'hills': 0.95,
-        'snow_spring': 1.08,
-        'interior_source': 1.10,
-    }
-
-    for path in (river_paths or []):
-        if not path:
-            continue
-
-        local_seen = set()
-        land_path = []
-        for py, px in path:
-            if not (0 <= py < height and 0 <= px < width):
-                continue
-            if not river_land[py, px]:
-                continue
-            if (py, px) in local_seen:
-                continue
-            local_seen.add((py, px))
-            land_path.append((py, px))
-
-        if not land_path:
-            continue
-
-        source_y, source_x = land_path[0]
-        hw_type = None
-        if headwater_types:
-            for sy, sx in land_path[:8]:
-                if (sy, sx) in headwater_types:
-                    hw_type = headwater_types[(sy, sx)]
-                    source_y, source_x = sy, sx
-                    break
-
-        source_rand = _coord_noise_01(source_y, source_x, seed=seed, salt=79)
-        source_strength = (
-            RIVER_SOURCE_INTENSITY_MIN +
-            (RIVER_SOURCE_INTENSITY_MAX - RIVER_SOURCE_INTENSITY_MIN) * source_rand
-        )
-        source_strength *= type_strength.get(hw_type, 1.0)
-        source_strength = float(np.clip(source_strength, 0.20, 1.15))
-
-        signal = source_strength
-        running_temp = float(temperature[source_y, source_x])
-
-        for idx, (py, px) in enumerate(land_path):
-            local_temp = float(temperature[py, px])
-            if idx > 0:
-                # Moving thermal average captures "temperature memory" along the river.
-                running_temp = running_temp * 0.87 + local_temp * 0.13
-
-            flow_signal[py, px] += signal
-            thermal_signal[py, px] += signal * running_temp
-            contributor_count[py, px] += 1
-
-            near_lake = np.exp(-float(dist_lake[py, px]) / 6.5)
-            heat_penalty = np.clip((running_temp - 0.50) / 0.50, 0.0, 1.0)
-            evaporation = (
-                RIVER_INTENSITY_EVAPORATION_BASE -
-                RIVER_INTENSITY_EVAPORATION_TEMP * heat_penalty +
-                RIVER_INTENSITY_EVAPORATION_LAKE_RECOVERY * near_lake
-            )
-            evaporation = float(np.clip(evaporation, 0.72, 0.985))
-            signal = max(0.03, signal * evaporation)
-
-    # Fallback safety for edge cases where a river tile did not receive path signal.
-    missing_signal = river_land & (flow_signal <= 0)
-    if missing_signal.any():
-        flow_signal[missing_signal] = 0.08
-        thermal_signal[missing_signal] = 0.08 * temperature[missing_signal]
-        contributor_count[missing_signal] = 1
-
-    avg_upstream_temp = np.copy(temperature)
-    valid_signal = flow_signal > 1e-6
-    avg_upstream_temp[valid_signal] = thermal_signal[valid_signal] / flow_signal[valid_signal]
-
-    flow_values = river_map[river_land]
-    flow_p95 = float(np.percentile(flow_values, 95)) if len(flow_values) > 0 else 1.0
-    flow_p95 = max(1.0, flow_p95)
-    flow_norm = np.zeros((height, width), dtype=np.float32)
-    flow_norm[river_land] = np.clip(
-        np.log1p(np.maximum(0.0, river_map[river_land])) / np.log1p(flow_p95),
-        0.0, 1.6
-    )
-    flow_factor = 0.68 + 0.55 * flow_norm
-
-    confluence_extra = np.maximum(0, contributor_count.astype(np.int32) - 1)
-    confluence_factor = 1.0 + RIVER_TRIBUTARY_INTENSITY_GAIN * np.log1p(confluence_extra)
-    temp_factor = np.clip(
-        1.06 - RIVER_INTENSITY_TEMP_SENSITIVITY * np.clip(avg_upstream_temp, 0.0, 1.0),
-        0.35, 1.22
-    )
-    lake_factor = 1.0 + RIVER_INTENSITY_LAKE_GAIN * np.exp(-dist_lake / 7.0)
-
-    raw_intensity = flow_signal * confluence_factor * temp_factor * lake_factor * flow_factor
-    river_raw = raw_intensity[river_land]
-
-    if len(river_raw) > 0:
-        lo = float(np.percentile(river_raw, 10))
-        hi = float(np.percentile(river_raw, 95))
-        if hi > lo + 1e-6:
-            norm = np.clip((raw_intensity - lo) / (hi - lo), 0.0, 1.0)
-        else:
-            max_val = float(river_raw.max()) if river_raw.max() > 0 else 1.0
-            norm = np.clip(raw_intensity / max_val, 0.0, 1.0)
-        intensity[river_land] = (0.08 + 0.92 * norm[river_land]).astype(np.float32)
-
-    intensity[~river_land] = 0.0
-    return intensity
-
-
 def apply_watershed_climate_effects(river_map, is_river, moisture, temperature, is_land, elevation, width, height, river_hierarchy=None, river_moisture_intensity=None):
     """
     STEP 9: Apply river-based climate effects.
     
-    Each river tile has a moisture_intensity driven by source strength,
-    tributary merges, upstream thermal history, and lake proximity.
-    Moisture boost from rivers is scaled by nearest-river intensity so low-flow
-    rivers can cross dry biomes without forcing uniform wet corridors.
+    Each river tile has a moisture_intensity (1.0 at source, 0.2 near ocean).
+    Moisture boost from rivers is scaled by the intensity of the nearest river tile.
+    This allows rivers to flow through plains without converting them to forest.
     
     Lakes still provide full moisture (handled separately).
     
@@ -5478,9 +4281,6 @@ def apply_watershed_climate_effects(river_map, is_river, moisture, temperature, 
     if not is_river.any():
         return moisture, temperature
     
-    # Keep a baseline so river boosts can be capped contextually.
-    base_moisture = moisture.copy()
-
     # Calculate distance from rivers and find nearest river for each tile
     dist_from_river = ndimage.distance_transform_edt(~is_river)
     
@@ -5514,15 +4314,11 @@ def apply_watershed_climate_effects(river_map, is_river, moisture, temperature, 
         # Get intensity from nearest river tile for each position
         nearest_y = nearest_river_indices[0]
         nearest_x = nearest_river_indices[1]
-        intensity_at_nearest = np.clip(river_moisture_intensity[nearest_y, nearest_x], 0.05, 1.35)
-        intensity_scale = (
-            (1.0 - RIVER_INTENSITY_MOISTURE_BLEND) +
-            RIVER_INTENSITY_MOISTURE_BLEND * np.power(intensity_at_nearest, 1.08)
-        )
+        intensity_at_nearest = river_moisture_intensity[nearest_y, nearest_x]
         
         # Scale moisture boost by intensity (only where there's some boost)
         has_boost = moisture_boost > 0
-        moisture_boost[has_boost] *= intensity_scale[has_boost]
+        moisture_boost[has_boost] *= intensity_at_nearest[has_boost]
     
     # Enhanced effects for major rivers (if hierarchy provided)
     # Major rivers still get extra boost but also scaled by intensity
@@ -5550,43 +4346,14 @@ def apply_watershed_climate_effects(river_map, is_river, moisture, temperature, 
                 _, major_nearest_indices = ndimage.distance_transform_edt(~is_major, return_indices=True)
                 major_nearest_y = major_nearest_indices[0]
                 major_nearest_x = major_nearest_indices[1]
-                major_intensity = np.clip(river_moisture_intensity[major_nearest_y, major_nearest_x], 0.05, 1.35)
-                major_scale = (
-                    (1.0 - RIVER_INTENSITY_MOISTURE_BLEND * 0.9) +
-                    (RIVER_INTENSITY_MOISTURE_BLEND * 0.9) * np.power(major_intensity, 1.04)
-                )
+                major_intensity = river_moisture_intensity[major_nearest_y, major_nearest_x]
                 major_has_boost = major_boost > 0
-                major_boost[major_has_boost] *= major_scale[major_has_boost]
+                major_boost[major_has_boost] *= major_intensity[major_has_boost]
             
             moisture_boost += major_boost
-
-    # Preserve biome diversity: dry regions should keep dry identities except
-    # at immediate riverbanks, so rivers can pass through varied biome zones.
-    dryness = np.clip((0.50 - base_moisture) / 0.50, 0.0, 1.0)
-    bank_distance_factor = np.clip((dist_from_river - 1.2) / 5.5, 0.0, 1.0)
-    dryland_damping = 1.0 - 0.70 * dryness * bank_distance_factor
-    moisture_boost *= dryland_damping
-
-    # General climate resistance: warm/drier zones should not get wide wet halos.
-    humidity_resistance = np.clip((0.60 - base_moisture) / 0.60, 0.0, 1.0)
-    heat_resistance = np.clip((temperature - 0.52) / 0.48, 0.0, 1.0)
-    floodplain_distance = np.clip((dist_from_river - 0.8) / 4.8, 0.0, 1.0)
-    climate_resistance = 1.0 - 0.62 * humidity_resistance * heat_resistance * floodplain_distance
-    moisture_boost *= climate_resistance
-
-    # Soft cap: allow lush riverbanks, but avoid wide uniform wet corridors.
-    max_added = 0.11 + 0.22 * base_moisture
-    max_added[dist_from_river < 1.2] += 0.07
-    warm_drier = (temperature > 0.55) & (base_moisture < 0.55)
-    max_added[warm_drier] = np.minimum(
-        max_added[warm_drier],
-        0.14 + 0.04 * np.exp(-dist_from_river[warm_drier] / 1.4)
-    )
-    max_added = np.clip(max_added, 0.0, 0.45)
-    moisture_boost = np.minimum(moisture_boost, max_added)
     
     # Apply to land only
-    moisture[is_land] = np.clip(base_moisture[is_land] + moisture_boost[is_land], 0, 1)
+    moisture[is_land] = np.clip(moisture[is_land] + moisture_boost[is_land], 0, 1)
     
     # Temperature reduction (within 4 tiles) - not affected by intensity
     temp_reduction = np.zeros_like(temperature)
@@ -5599,7 +4366,7 @@ def apply_watershed_climate_effects(river_map, is_river, moisture, temperature, 
 
 
 def generate_rivers(width, height, seed, elevation, is_land, is_mountain, is_lake, 
-                    lake_ids, dist_ocean, return_paths=False):
+                    lake_ids, dist_ocean):
     """
     Main watershed-based river generation function.
     
@@ -5622,7 +4389,6 @@ def generate_rivers(width, height, seed, elevation, is_land, is_mountain, is_lak
     - elevation: modified by basin carving
     - river_hierarchy: dict mapping (y,x) to hierarchy level
     - headwater_types: dict mapping headwater (y,x) to type
-    - river_paths: optional, returned only when return_paths=True
     """
     print("    Computing D8 flow directions...")
     flow_dir, is_basin = compute_flow_direction_field(
@@ -5722,11 +4488,6 @@ def generate_rivers(width, height, seed, elevation, is_land, is_mountain, is_lak
             d40 = (river_dists >= 30).sum()
             print(f"    River tiles by distance: <10:{d10}, 10-20:{d20}, 20-30:{d30}, 30+:{d40}")
     
-    if return_paths:
-        return (
-            is_river, river_ids, river_map, river_width, river_stats, elevation,
-            river_hierarchy, headwater_types, river_moisture_intensity, river_paths
-        )
     return is_river, river_ids, river_map, river_width, river_stats, elevation, river_hierarchy, headwater_types, river_moisture_intensity
 
 
@@ -7012,11 +5773,7 @@ def enforce_biome_percentages_v2(biomes, effective_land, non_mountain_count, tar
     desert_suitable = (moisture < 0.55) & (temperature > 0.18) & (dist_lake > 4) & (dist_river > 2)
     
     # Forest: needs moisture, moderate temperature
-    forest_suitable = (
-        (moisture > 0.38) |
-        ((dist_river < 3.5) & (moisture > 0.28)) |
-        ((dist_lake < 8) & (moisture > 0.30))
-    )
+    forest_suitable = (moisture > 0.35) | ((dist_river < 6) | (dist_lake < 10))
     
     # Snow_tundra: needs cold
     tundra_suitable = (temperature < 0.40) | (elevation > 0.60)
@@ -7046,14 +5803,14 @@ def enforce_biome_percentages_v2(biomes, effective_land, non_mountain_count, tar
     desert_score = ((1.0 - moisture) * 0.4 + desert_heat * 0.35 + np.clip(dist_lake / 30, 0, 1) * 0.25)
     desert_score = np.where(temperature < 0.20, desert_score * 0.1, desert_score)  # Heavy penalty for cold
     
-    forest_score = moisture * 0.55 + np.clip(1.0 - dist_river / 14, 0, 1) * 0.20 + (1.0 - elevation) * 0.25
+    forest_score = moisture * 0.5 + np.clip(1.0 - dist_river / 15, 0, 1) * 0.3 + (1.0 - elevation) * 0.2
     tundra_score = (1.0 - temperature) * 0.6 + elevation * 0.3 + moisture * 0.1
     plains_score = (1.0 - elevation) * 0.4 + np.clip(1.0 - dist_river / 20, 0, 1) * 0.3 + 0.3
     hills_base_score = elevation * 0.5 + np.clip(1.0 - dist_lake / 25, 0, 1) * 0.3 + 0.2
     rocky_hills_score = hills_base_score * np.clip((0.40 - moisture) / 0.30, 0.3, 1.0)
     grassy_hills_score = hills_base_score * (1.0 - np.abs(moisture - 0.45) / 0.25)
     # Forest hills get strong river proximity bonus (rivers flow through forested hills)
-    forest_hills_score = hills_base_score * np.clip((moisture - 0.35) / 0.35, 0.3, 1.0) + np.clip(1.0 - dist_river / 10, 0, 1) * 0.10
+    forest_hills_score = hills_base_score * np.clip((moisture - 0.35) / 0.35, 0.3, 1.0) + np.clip(1.0 - dist_river / 12, 0, 1) * 0.15
     
     score_arrays = {
         'desert': desert_score,
@@ -7942,7 +6699,7 @@ def generate_world(seed):
     print(f"  - Land tiles: {land_count} ({land_count/TOTAL_TILES*100:.2f}%)")
     print(f"  - Ocean tiles: {ocean_count} ({ocean_count/TOTAL_TILES*100:.2f}%)")
     
-    step_header(5, f"Identifying mountains ({int(MOUNTAIN_PERCENT_OF_LAND*100)}% of land)...")
+    step_header(5, "Identifying mountains (10% of land)...")
     is_mountain = identify_mountains(elevation, is_land, convergent, MOUNTAIN_PERCENT_OF_LAND)
     mountain_count = is_mountain.sum()
     print(f"  - Mountain tiles: {mountain_count} ({mountain_count/land_count*100:.2f}% of land)")
@@ -7953,8 +6710,8 @@ def generate_world(seed):
     
     # Generate river system FIRST (before lakes) for complete river networks
     step_header(7, "Generating realistic river network...")
-    is_river, river_ids, river_map, river_width, river_stats, elevation, river_hierarchy, headwater_types, river_moisture_intensity, river_paths = generate_rivers(
-        width, height, seed, elevation, is_land, is_mountain, None, None, dist_ocean, return_paths=True
+    is_river, river_ids, river_map, river_width, river_stats, elevation, river_hierarchy, headwater_types, river_moisture_intensity = generate_rivers(
+        width, height, seed, elevation, is_land, is_mountain, None, None, dist_ocean
     )
     print(f"  - Total river tiles: {river_stats['total_tiles']}")
     print(f"  - Number of rivers: {river_stats['num_rivers']}")
@@ -7993,9 +6750,6 @@ def generate_world(seed):
         print(f"  - Original lake sizes: min={min(lake_sizes)}, max={max(lake_sizes)}, avg={np.mean(lake_sizes):.1f}")
     
     step_header(9, "Computing distance fields for rivers and lakes...")
-    # Rivers are already generated in Step 7 using the advanced pipeline.
-    # Re-generating here would be redundant and can reference climate fields
-    # before they are initialized.
     dist_river = compute_distance_from_rivers(is_river, width, height)
     dist_lake = compute_distance_from_lakes(is_lake, width, height)
     print(f"  - Max distance from river: {dist_river.max():.1f} tiles")
@@ -8006,13 +6760,6 @@ def generate_world(seed):
     roughness = compute_roughness_map(elevation, width, height)
     dist_coast = compute_distance_to_coast(is_land, width, height)
     aspect, grad_x, grad_y = compute_slope_direction(elevation, width, height)
-    climate_landforms = classify_landforms(elevation, slope, is_land, is_mountain)
-    is_hills = climate_landforms == 'hills'
-    dist_mountain = ndimage.distance_transform_edt(~is_mountain)
-    dist_hills = ndimage.distance_transform_edt(~is_hills)
-    forest_hint = estimate_forest_potential(
-        width, height, elevation, is_land, dist_ocean, dist_river, dist_lake, slope
-    )
     print(f"  - Slope range: {slope.min():.3f} - {slope.max():.3f}")
     print(f"  - Roughness range: {roughness.min():.3f} - {roughness.max():.3f}")
     print(f"  - Max distance from coast: {dist_coast.max():.1f} tiles")
@@ -8020,8 +6767,7 @@ def generate_world(seed):
     step_header(11, "Generating natural temperature simulation...")
     temperature = generate_natural_temperature(
         width, height, seed, elevation, is_land, is_mountain,
-        dist_ocean, dist_river, dist_lake, slope, aspect,
-        forest_hint=forest_hint, dist_mountain=dist_mountain, dist_hills=dist_hills
+        dist_ocean, dist_river, dist_lake, slope, aspect
     )
     temp_land = temperature[is_land]
     print(f"  - Temperature range on land: {temp_land.min():.3f} - {temp_land.max():.3f}")
@@ -8029,9 +6775,7 @@ def generate_world(seed):
     step_header(12, "Generating natural moisture simulation (with wind & rain shadow)...")
     moisture, wind_dir, rain_shadow = generate_natural_moisture(
         width, height, seed, elevation, is_land, is_mountain,
-        dist_ocean, dist_river, dist_lake, temperature,
-        slope=slope, aspect=aspect, forest_hint=forest_hint, is_hills=is_hills,
-        dist_mountain=dist_mountain, dist_hills=dist_hills
+        dist_ocean, dist_river, dist_lake, temperature, slope
     )
     moist_land = moisture[is_land]
     print(f"  - Moisture range on land: {moist_land.min():.3f} - {moist_land.max():.3f}")
@@ -8044,19 +6788,6 @@ def generate_world(seed):
     print(f"  - Rain shadow affected tiles: {shadow_tiles} ({shadow_pct:.1f}% of land)")
     
     step_header(13, "Applying river climate effects...")
-    river_moisture_intensity = recompute_river_moisture_intensity(
-        river_paths, is_river, is_land, river_map, temperature, dist_lake,
-        seed=seed, headwater_types=headwater_types
-    )
-    river_land_mask = is_river & is_land
-    if river_land_mask.any():
-        river_intensity_vals = river_moisture_intensity[river_land_mask]
-        print(
-            "  - River moisture intensity:"
-            f" min={river_intensity_vals.min():.3f},"
-            f" median={np.median(river_intensity_vals):.3f},"
-            f" max={river_intensity_vals.max():.3f}"
-        )
     moisture, temperature = apply_watershed_climate_effects(
         river_map, is_river, moisture, temperature, is_land, elevation, width, height, 
         river_hierarchy=river_hierarchy, river_moisture_intensity=river_moisture_intensity
@@ -8072,105 +6803,20 @@ def generate_world(seed):
     print(f"  - Island tiles: {island_count} ({island_count/ocean_count*100:.2f}% of ocean)")
     
     is_land_with_islands = is_land | is_island
-
-    # Islands can occasionally block a previously ocean-reaching mouth.
-    # Repair river connectivity against final land mask, then prune any
-    # remaining disconnected fragments.
-    post_island_reach = compute_ocean_reachability(is_river, is_land_with_islands, width, height)
-    disconnected_mask = is_river & is_land_with_islands & ~post_island_reach
-    if disconnected_mask.any():
-        flow_dir_post = compute_flow_direction(elevation, width, height)
-        dist_ocean_post = compute_distance_from_ocean(is_land_with_islands, width, height)
-        labeled_disc, num_disc = ndimage.label(disconnected_mask, structure=np.ones((3, 3), dtype=np.int32))
-        next_river_id = int(river_ids.max() + 1) if river_ids.size > 0 else 0
-        extended_components = 0
-
-        for comp_id in range(1, num_disc + 1):
-            comp_mask = labeled_disc == comp_id
-            ys, xs = np.where(comp_mask)
-            if len(ys) == 0:
-                continue
-
-            coast_idx = int(np.argmin(dist_ocean_post[ys, xs]))
-            sy, sx = int(ys[coast_idx]), int(xs[coast_idx])
-            base_id = int(river_ids[sy, sx]) if river_ids[sy, sx] >= 0 else next_river_id
-            if river_ids[sy, sx] < 0:
-                next_river_id += 1
-
-            extended_path = extend_river_to_ocean(
-                [(sy, sx)],
-                is_river, is_land_with_islands, post_island_reach,
-                flow_dir_post, width, height,
-                elevation=elevation, dist_ocean=dist_ocean_post
-            )
-            if len(extended_path) <= 1:
-                continue
-
-            for py, px in extended_path[1:]:
-                if not (0 <= py < height and 0 <= px < width):
-                    continue
-                if not is_land_with_islands[py, px]:
-                    continue
-                if not is_river[py, px]:
-                    is_river[py, px] = True
-                    river_map[py, px] = max(1.0, river_map[sy, sx])
-                    river_width[py, px] = max(1.0, river_width[sy, sx] if river_width[sy, sx] > 0 else 1.0)
-                    river_ids[py, px] = base_id
-                    if river_moisture_intensity is not None:
-                        source_intensity = river_moisture_intensity[sy, sx]
-                        river_moisture_intensity[py, px] = max(0.18, source_intensity * 0.85)
-                    if river_hierarchy is not None:
-                        river_hierarchy[(py, px)] = river_hierarchy.get((sy, sx), 'river')
-            extended_components += 1
-
-        post_island_reach = compute_ocean_reachability(is_river, is_land_with_islands, width, height)
-        prune_mask = is_river & is_land_with_islands & ~post_island_reach
-        pruned_tiles = int(prune_mask.sum())
-        if pruned_tiles > 0:
-            is_river[prune_mask] = False
-            river_map[prune_mask] = 0.0
-            river_width[prune_mask] = 0.0
-            river_ids[prune_mask] = -1
-            if river_moisture_intensity is not None:
-                river_moisture_intensity[prune_mask] = 0.0
-            if river_hierarchy is not None:
-                for ry, rx in list(river_hierarchy.keys()):
-                    if prune_mask[ry, rx]:
-                        del river_hierarchy[(ry, rx)]
-
-        print(f"  - Post-island river repair: extended {extended_components} disconnected components")
-        if pruned_tiles > 0:
-            print(f"  - Post-island cleanup: pruned {pruned_tiles} non-ocean-reachable river tiles")
-        dist_river = compute_distance_from_rivers(is_river, width, height)
     
     step_header(15, "Assigning biomes with expanded classification system...")
     # Use the new expanded biome system
     biomes = assign_biomes_expanded(
         width, height, seed, is_land, is_mountain, is_lake, is_river,
         temperature, moisture, elevation, slope, roughness,
-        dist_river, dist_coast, is_island, dist_ocean=dist_ocean
+        dist_river, dist_coast, is_island
     )
     
     # Enforce category-level distribution targets (mountains, hills, plains, forests, etc.)
     land_mask = is_land | is_island
     biomes = enforce_biome_categories(biomes, land_mask, temperature, moisture, elevation,
                                        dist_river, dist_lake, dist_coast, seed)
-
-    # Final diversity safety pass: if a biome is still absent, seed it only where
-    # environmental conditions strongly match that biome.
-    post_landforms = classify_landforms(elevation, slope, land_mask, is_mountain)
-    post_thresholds = compute_expanded_biome_thresholds(
-        temperature, moisture, elevation, slope, roughness, land_mask
-    )
-    post_hills = post_landforms == 'hills'
-    post_dist_mountain = ndimage.distance_transform_edt(~is_mountain)
-    post_dist_hills = ndimage.distance_transform_edt(~post_hills)
-    biomes = enforce_expanded_biome_presence(
-        biomes, land_mask, post_landforms, temperature, moisture, elevation, slope, roughness,
-        dist_river, dist_coast, dist_ocean, post_dist_mountain, post_dist_hills,
-        post_thresholds, is_lake, is_river, seed + 19
-    )
-
+    
     # Count biome distribution
     land_mask = is_land | is_island
     biome_counts = {}
@@ -8188,12 +6834,6 @@ def generate_world(seed):
     for biome, count in sorted_biomes:
         pct = count / total_land_biomes * 100 if total_land_biomes > 0 else 0
         print(f"    {biome}: {count} ({pct:.1f}%)")
-
-    missing_biomes = [b for b in EXPANDED_REQUIRED_BIOMES if biome_counts.get(b, 0) == 0]
-    if missing_biomes:
-        print(f"  - Missing expanded biomes after assignment: {missing_biomes}")
-    else:
-        print("  - All expanded biomes present in this world")
     
     step_header(16, "Computing tile environment resources...")
     tile_env = compute_tile_environment(
@@ -8335,7 +6975,7 @@ def generate_world(seed):
     mountain_tiles_count = df['is_mountain'].sum()
     original_land = is_land.sum()
     mountain_pct = mountain_tiles_count / original_land * 100 if original_land > 0 else 0
-    print(f"\nMountain Coverage: {mountain_tiles_count} tiles ({mountain_pct:.2f}% of original land) [target: {int(MOUNTAIN_PERCENT_OF_LAND*100)}%]")
+    print(f"\nMountain Coverage: {mountain_tiles_count} tiles ({mountain_pct:.2f}% of original land) [target: 10%]")
     
     # River System Summary
     print(f"\nRIVER NETWORK SUMMARY:")
@@ -8553,14 +7193,14 @@ def visualize_world(df, seed, save_image=True):
     
     plt.close(fig)
     
-    # Generate Atlas Map (separate image)
+    # Generate Atlas Map with Grid (separate image)
     generate_atlas_map(df, seed, biome_colors, save_image)
 
 
 def generate_atlas_map(df, seed, biome_colors, save_image=True):
     """
-    Generate a separate atlas map image.
-    Only shows the map colors, with no scale or other annotations.
+    Generate a separate atlas map image with grid lines.
+    Only shows the map with colors and grids, no scale or other annotations.
     """
     if not MATPLOTLIB_AVAILABLE:
         return
@@ -8584,6 +7224,13 @@ def generate_atlas_map(df, seed, biome_colors, save_image=True):
     # Display the map
     ax.imshow(atlas_img)
     
+    # Add grid lines for all 200x200 tiles
+    for x in range(0, width + 1):
+        ax.axvline(x - 0.5, color='black', linewidth=0.2, alpha=0.6)
+    
+    for y in range(0, height + 1):
+        ax.axhline(y - 0.5, color='black', linewidth=0.2, alpha=0.6)
+    
     # Remove axes and all annotations
     ax.axis('off')
     
@@ -8593,8 +7240,8 @@ def generate_atlas_map(df, seed, biome_colors, save_image=True):
     if save_image:
         output_dir = os.path.join("map_layers", str(seed))
         os.makedirs(output_dir, exist_ok=True)
-        plt.savefig(os.path.join(output_dir, 'atlas.png'), dpi=200, bbox_inches='tight', pad_inches=0)
-        print("Atlas map saved to: atlas.png")
+        plt.savefig(os.path.join(output_dir, f'world_seed_{seed}_atlas.png'), dpi=200, bbox_inches='tight', pad_inches=0)
+        print(f"Atlas map saved to: world_seed_{seed}_atlas.png")
     
     plt.close(fig)
 
