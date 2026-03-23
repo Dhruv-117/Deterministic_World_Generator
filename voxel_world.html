@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Voxel World Renderer</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#060c18;color:#c8bfa0;font-family:'Georgia',serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+#setup{width:100%;max-width:860px;padding:1.5rem 1rem;display:flex;flex-direction:column;align-items:center;}
+h1{font-size:1.5rem;color:#b8953a;letter-spacing:.1em;margin-bottom:.2rem;text-align:center;font-weight:normal}
+.sub{font-size:.7rem;color:#3a4a5a;font-family:monospace;margin-bottom:1.4rem;text-align:center}
+.panel{background:rgba(8,14,24,0.85);border:1px solid #1a2535;border-radius:10px;padding:1.1rem 1.3rem;width:100%;margin-bottom:.9rem}
+.panel h2{font-size:.65rem;text-transform:uppercase;letter-spacing:.14em;color:#3a4a5a;margin-bottom:.8rem}
+.upload-row{display:grid;grid-template-columns:1fr 1fr;gap:.7rem;margin-bottom:.8rem}
+.ubox{border:1px dashed #1e2e42;border-radius:7px;padding:.8rem;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;position:relative;overflow:hidden}
+.ubox:hover{border-color:#b8953a;background:rgba(184,149,58,0.04)}
+.ubox.ok{border-color:#2e7d32;border-style:solid;background:rgba(46,125,50,0.06)}
+.ubox input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.ubox .ico{font-size:1.3rem;display:block;margin-bottom:.25rem}
+.ubox .lbl{font-size:.7rem;color:#3a4a5a}
+.ubox .fn{font-size:.65rem;color:#2e7d32;font-family:monospace;margin-top:.2rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ctrl-row{display:flex;gap:.7rem;align-items:flex-end;flex-wrap:wrap}
+.ctrl{display:flex;flex-direction:column;gap:3px}
+.ctrl label{font-size:.62rem;text-transform:uppercase;letter-spacing:.1em;color:#3a4a5a}
+select,input[type=range]{background:#060c18;border:1px solid #1a2535;color:#c8bfa0;border-radius:5px;padding:.3rem .55rem;font-size:.78rem}
+input[type=range]{padding:0;height:26px;width:110px;cursor:pointer}
+select{cursor:pointer}select:focus,input:focus{outline:none;border-color:#b8953a}
+.btn{background:#b8953a;color:#060c18;border:none;border-radius:6px;padding:.42rem 1.1rem;font-size:.82rem;font-weight:bold;cursor:pointer;letter-spacing:.05em;transition:background .15s,transform .1s;margin-top:auto;white-space:nowrap}
+.btn:hover{background:#d4ae55}.btn:active{transform:scale(.97)}.btn:disabled{background:#1a2535;color:#2a3a4a;cursor:not-allowed}
+.prog{display:none;background:rgba(6,12,24,0.9);border:1px solid #1a2535;border-radius:8px;padding:.8rem 1.2rem;width:100%;margin-bottom:.9rem}
+.pb{background:#0d1a2a;border-radius:3px;height:4px;margin-top:.5rem;overflow:hidden}
+.pf{height:100%;background:linear-gradient(90deg,#6a5018,#b8953a,#d4ae55);border-radius:3px;width:0%;transition:width .2s}
+.stg{font-family:monospace;font-size:.68rem;color:#3a4a5a;margin-top:.25rem}
+#viewport{display:none;position:fixed;inset:0;background:#060c18;}
+#threeCanvas{display:block;width:100%;height:100%;}
+#hud{position:fixed;bottom:0;left:0;right:0;display:none;pointer-events:none;padding:.6rem 1rem;background:linear-gradient(transparent,rgba(3,8,18,0.88));}
+.hud-inner{display:flex;justify-content:space-between;align-items:flex-end;max-width:1200px;margin:0 auto;pointer-events:all;}
+.hud-hint{font-size:.62rem;color:#3a4a5a;font-family:monospace;line-height:1.8}
+.hud-hint span{color:#7a8a6a}
+#modeBtn{background:transparent;border:1px solid #b8953a;color:#b8953a;border-radius:5px;padding:.28rem .7rem;font-size:.72rem;cursor:pointer;font-family:monospace;letter-spacing:.06em;transition:background .15s;}
+#modeBtn:hover{background:rgba(184,149,58,.15)}
+#modeLbl{font-size:.62rem;font-family:monospace;color:#3a4a5a;text-align:right;margin-bottom:.18rem}
+#backBtn{background:transparent;border:1px solid #1a2535;color:#3a4a5a;border-radius:5px;padding:.28rem .7rem;font-size:.68rem;cursor:pointer;font-family:monospace;margin-left:.5rem;transition:color .15s,border-color .15s;}
+#backBtn:hover{color:#b8953a;border-color:#b8953a}
+#crosshair{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);display:none;pointer-events:none;color:rgba(200,191,160,0.6);font-size:1.2rem;line-height:1;font-family:monospace;}
+</style>
+</head>
+<body>
+
+<div id="setup">
+  <h1>Voxel World Renderer</h1>
+  <div class="sub">atlas.png + world.csv → real-time 3D voxel terrain</div>
+  <div class="panel">
+    <h2>Input Files</h2>
+    <div class="upload-row">
+      <div class="ubox" id="aBox"><span class="ico">🗺</span><div class="lbl">Atlas PNG (biome colors)</div><div class="fn" id="aName">click to upload</div><input type="file" accept=".png,.jpg" id="aIn"></div>
+      <div class="ubox" id="cBox"><span class="ico">📊</span><div class="lbl">World CSV (elevation data)</div><div class="fn" id="cName">click to upload</div><input type="file" accept=".csv" id="cIn"></div>
+    </div>
+    <div class="ctrl-row">
+      <div class="ctrl"><label>Grid Size</label><select id="gridSz"><option value="1024" selected>1024</option></select></div>
+      <div class="ctrl"><label>Height Scale</label><input type="range" id="hscale" min="2" max="20" value="8" step="1"></div>
+      <div class="ctrl"><label>Water Level</label><input type="range" id="wlevel" min="1" max="40" value="18" step="1"></div>
+      <div class="ctrl"><label>Style</label><select id="styleS"><option value="natural">Natural</option><option value="fantasy" selected>Fantasy</option></select></div>
+      <button class="btn" id="renderBtn" disabled>▶ Build World</button>
+    </div>
+  </div>
+  <div class="prog" id="prog">
+    <div id="stgLbl" class="stg">—</div>
+    <div class="pb"><div class="pf" id="pFill"></div></div>
+  </div>
+</div>
+
+<div id="viewport"><canvas id="threeCanvas"></canvas></div>
+
+<div id="hud">
+  <div class="hud-inner">
+    <div class="hud-hint">
+      <div><span>Orbit:</span> left-drag to rotate · right-drag to pan · scroll to zoom</div>
+      <div><span>Fly:</span> WASD move · mouse look · Q/E up/down · Shift to sprint</div>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end">
+      <div id="modeLbl">ORBIT MODE</div>
+      <div style="display:flex;gap:.4rem">
+        <button id="modeBtn">Switch to Fly</button>
+        <button id="backBtn">↩ Setup</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="crosshair">+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ══════════════════════════════════════════════════════
+// BIOME DATA
+// ══════════════════════════════════════════════════════
+const BIOME={
+  deep_ocean:[14,38,72,false,true],inland_lake:[24,72,120,false,true],river:[38,102,148,false,true],
+  grassland:[92,138,54,false,false],meadow:[108,155,65,false,false],steppe:[155,138,82,false,false],
+  savanna:[178,148,65,false,false],temperate_forest:[52,98,42,true,false],woodland:[72,115,52,true,false],
+  tropical_forest:[38,108,46,true,false],rainforest:[28,90,38,true,false],
+  sand_desert:[218,188,108,false,false],rock_desert:[162,132,88,false,false],badlands:[155,78,42,false,false],
+  oasis:[72,148,68,true,false],snow_plains:[228,235,245,false,false],snow_forest:[195,210,220,true,false],
+  snow_hills:[210,220,232,false,false],glacier:[222,232,245,false,false],
+  grassy_hills:[98,142,62,false,false],forest_hills:[62,108,50,true,false],rocky_hills:[128,118,100,false,false],
+  rocky_mountains:[108,108,115,false,false],snow_mountains:[225,232,242,false,false],
+  forest_mountains:[68,100,58,true,false],alpine_meadows:[138,172,92,false,false],
+  swamp:[58,88,55,true,false],marsh:[72,108,65,false,false],mangrove:[48,95,58,true,false]
+};
+const ATLAS_MAP={
+  '31,78,115':'deep_ocean','63,136,197':'inland_lake','30,144,255':'river',
+  '143,207,92':'grassland','168,217,111':'meadow','191,160,98':'steppe','205,187,85':'savanna',
+  '63,143,58':'temperate_forest','110,159,74':'woodland','46,125,50':'tropical_forest','27,94,32':'rainforest',
+  '239,210,122':'sand_desert','182,140,90':'rock_desert','158,95,63':'badlands','76,175,80':'oasis',
+  '244,248,255':'snow_plains','205,223,236':'snow_forest','219,227,239':'snow_hills','230,247,255':'glacier',
+  '127,174,87':'grassy_hills','85,127,69':'forest_hills','138,129,117':'rocky_hills',
+  '122,127,135':'rocky_mountains','240,244,248':'snow_mountains','95,117,101':'forest_mountains',
+  '169,201,127':'alpine_meadows','79,101,48':'swamp','111,140,74':'marsh','62,111,87':'mangrove'
+};
+const BIOME_BASE_ELEV={
+  deep_ocean:.00,inland_lake:.04,river:.06,grassland:.14,meadow:.16,steppe:.18,savanna:.15,
+  temperate_forest:.20,woodland:.18,tropical_forest:.22,rainforest:.26,sand_desert:.14,
+  rock_desert:.18,badlands:.28,oasis:.11,snow_plains:.18,snow_forest:.28,snow_hills:.42,
+  glacier:.52,grassy_hills:.32,forest_hills:.38,rocky_hills:.42,rocky_mountains:.70,
+  snow_mountains:.90,forest_mountains:.60,alpine_meadows:.62,swamp:.07,marsh:.09,mangrove:.05
+};
+
+// ══════════════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════════════
+function lcg(seed){let s=seed>>>0;return()=>{s=(Math.imul(1664525,s)+1013904223)>>>0;return s/4294967296;};}
+function hashStr(s){let h=2166136261;for(let i=0;i<s.length;i++)h=Math.imul(h^s.charCodeAt(i),16777619);return h>>>0;}
+function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+function valueNoise(W,H,seed,scale){
+  const r=lcg(seed);
+  const gW=Math.ceil(W/scale)+2,gH=Math.ceil(H/scale)+2;
+  const g=new Float32Array(gW*gH);for(let i=0;i<g.length;i++)g[i]=r();
+  const o=new Float32Array(W*H);
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    const fx=x/scale,fy=y/scale,ix=Math.floor(fx),iy=Math.floor(fy);
+    const u=fx-ix,v=fy-iy,uu=u*u*(3-2*u),vv=v*v*(3-2*v);
+    const x0=Math.min(gW-1,ix),x1=Math.min(gW-1,ix+1),y0=Math.min(gH-1,iy),y1=Math.min(gH-1,iy+1);
+    o[y*W+x]=g[y0*gW+x0]*(1-uu)*(1-vv)+g[y0*gW+x1]*uu*(1-vv)+g[y1*gW+x0]*(1-uu)*vv+g[y1*gW+x1]*uu*vv;
+  }
+  return o;
+}
+function fbm(W,H,seed,baseScale,octaves=4){
+  const o=new Float32Array(W*H);let amp=1,tot=0;
+  for(let i=0;i<octaves;i++){
+    const n=valueNoise(W,H,seed+i*1337,baseScale/(1<<i));
+    for(let j=0;j<o.length;j++)o[j]+=n[j]*amp;
+    tot+=amp;amp*=0.5;
+  }
+  for(let j=0;j<o.length;j++)o[j]/=tot;
+  return o;
+}
+function setStage(l,p){document.getElementById('stgLbl').textContent=l;document.getElementById('pFill').style.width=p+'%';}
+function tick(){return new Promise(r=>setTimeout(r,8));}
+
+// ══════════════════════════════════════════════════════
+// DATA PARSING
+// ══════════════════════════════════════════════════════
+function parseCSV(txt){
+  const lines=txt.trim().split('\n');
+  const hdr=lines[0].split(',').map(h=>h.trim());
+  const rows=[];
+  for(let i=1;i<lines.length;i++){const v=lines[i].split(',');const o={};hdr.forEach((h,j)=>o[h]=v[j]?v[j].trim():'');rows.push(o);}
+  return{hdr,rows};
+}
+function buildCSVGrids(rows,N){
+  let W=0,H=0;
+  for(const r of rows){const x=+r.x,y=+r.y;if(x>W)W=x;if(y>H)H=y;}W++;H++;
+  const elev=new Float32Array(W*H);
+  const biomeRaw=new Array(W*H).fill('grassland');
+  const wood=new Float32Array(W*H);
+  const isLakeRaw=new Uint8Array(W*H);
+  const isRiverRaw=new Uint8Array(W*H);
+  for(const r of rows){
+    const x=+r.x,y=+r.y,i=y*W+x;
+    elev[i]=+r.elevation||0;
+    if(r.biome)biomeRaw[i]=r.biome;
+    wood[i]=+(r.wood_biomass_capacity||r.wood_biomass||0);
+    if(r.is_lake==='1'||r.is_lake==='true'||r.is_lake==='True') isLakeRaw[i]=1;
+    if(r.is_river==='1'||r.is_river==='true'||r.is_river==='True') isRiverRaw[i]=1;
+  }
+  let mn=Infinity,mx=-Infinity;
+  for(let i=0;i<W*H;i++){if(elev[i]<mn)mn=elev[i];if(elev[i]>mx)mx=elev[i];}
+  const rng=mx-mn||1;for(let i=0;i<W*H;i++)elev[i]=(elev[i]-mn)/rng;
+  function rs(src){
+    const dst=new Float32Array(N*N);
+    for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+      const sx=Math.round(x*(W-1)/(N-1)),sy=Math.round(y*(H-1)/(N-1));
+      dst[y*N+x]=src[Math.min(W*H-1,sy*W+sx)];
+    }return dst;
+  }
+  function rsU8(src){
+    const dst=new Uint8Array(N*N);
+    for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+      const sx=Math.round(x*(W-1)/(N-1)),sy=Math.round(y*(H-1)/(N-1));
+      dst[y*N+x]=src[Math.min(W*H-1,sy*W+sx)];
+    }return dst;
+  }
+  function rsBiome(){
+    const dst=new Array(N*N);
+    for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+      const sx=Math.round(x*(W-1)/(N-1)),sy=Math.round(y*(H-1)/(N-1));
+      dst[y*N+x]=biomeRaw[sy*W+sx]||'grassland';
+    }return dst;
+  }
+  return{N,elev:rs(elev),wood:rs(wood),biome:rsBiome(),isLake:rsU8(isLakeRaw),isRiver:rsU8(isRiverRaw)};
+}
+function decodeAtlas(img,N){
+  const c=document.createElement('canvas');c.width=N;c.height=N;
+  const ctx=c.getContext('2d');ctx.drawImage(img,0,0,N,N);
+  const px=ctx.getImageData(0,0,N,N).data;
+  const keys=Object.entries(ATLAS_MAP).map(([k,v])=>{const p=k.split(',');return[+p[0],+p[1],+p[2],v];});
+  const out=new Array(N*N);
+  for(let i=0;i<N*N;i++){
+    const r=px[i*4],gg=px[i*4+1],b=px[i*4+2];
+    let best='grassland',bd=1e9;
+    for(const[kr,kg,kb,name]of keys){const d=(r-kr)**2+(gg-kg)**2+(b-kb)**2;if(d<bd){bd=d;best=name;}}
+    out[i]=bd<3600?best:'grassland';
+  }
+  return out;
+}
+
+// ══════════════════════════════════════════════════════
+// FILE INPUTS
+// ══════════════════════════════════════════════════════
+let atlasImg=null,csvText=null;
+document.getElementById('aIn').addEventListener('change',e=>{
+  const f=e.target.files[0];if(!f)return;
+  document.getElementById('aName').textContent=f.name;
+  document.getElementById('aBox').classList.add('ok');
+  const img=new Image();img.onload=()=>{atlasImg=img;checkReady();};img.src=URL.createObjectURL(f);
+});
+document.getElementById('cIn').addEventListener('change',e=>{
+  const f=e.target.files[0];if(!f)return;
+  document.getElementById('cName').textContent=f.name;
+  document.getElementById('cBox').classList.add('ok');
+  f.text().then(t=>{csvText=t;checkReady();});
+});
+function checkReady(){document.getElementById('renderBtn').disabled=!(atlasImg&&csvText);}
+document.getElementById('renderBtn').addEventListener('click',startBuild);
+document.getElementById('backBtn').addEventListener('click',()=>{
+  document.getElementById('viewport').style.display='none';
+  document.getElementById('hud').style.display='none';
+  document.getElementById('setup').style.display='flex';
+  exitFly();
+});
+
+// ══════════════════════════════════════════════════════
+// THREE.JS GLOBALS
+// ══════════════════════════════════════════════════════
+let renderer,scene,camera,animId;
+
+// ══════════════════════════════════════════════════════
+// BUILD WORLD
+// ══════════════════════════════════════════════════════
+async function startBuild(){
+  document.getElementById('renderBtn').disabled=true;
+  document.getElementById('prog').style.display='block';
+
+  const N=+document.getElementById('gridSz').value;
+  const hscaleUI=+document.getElementById('hscale').value;
+  const style=document.getElementById('styleS').value;
+  const satMul=style==='fantasy'?1.25:1.0;
+
+  setStage('Parsing CSV…',4);await tick();
+  const csv=parseCSV(csvText);
+
+  setStage('Building grids…',12);await tick();
+  const g=buildCSVGrids(csv.rows,N);
+
+  setStage('Decoding atlas…',20);await tick();
+  const atlasBiome=decodeAtlas(atlasImg,N);
+  const biome=new Array(N*N);
+  for(let i=0;i<N*N;i++) biome[i]=atlasBiome[i]||g.biome[i]||'grassland';
+
+  setStage('Generating terrain…',30);await tick();
+  const seed=hashStr(csvText.slice(0,400));
+  const fbmH=fbm(N,N,seed,N/1.8,3); // Larger scale and fewer octaves for smoother terrain
+  const microN=valueNoise(N,N,seed+999,3);
+
+  const maxVox=Math.round(hscaleUI*10);
+  const heightVox=new Int32Array(N*N);
+
+  // isWater: true for any cell that is ocean/lake/river biome OR flagged by CSV
+  const WATER_BIOMES=new Set(['deep_ocean','inland_lake','river']);
+  const isWaterCell=new Uint8Array(N*N);
+  const isLakeCell=new Uint8Array(N*N);
+  const isRiverCell=new Uint8Array(N*N);
+
+  for(let i=0;i<N*N;i++){
+    const bname=biome[i];
+    const def=BIOME[bname]||BIOME.grassland;
+    const waterByBiome=def[4]||WATER_BIOMES.has(bname);
+    const lakeFlag=g.isLake[i]===1;
+    const riverFlag=g.isRiver[i]===1;
+    if(lakeFlag||(waterByBiome&&!riverFlag)) isLakeCell[i]=1;
+    if(riverFlag) isRiverCell[i]=1;
+    if(waterByBiome||lakeFlag||riverFlag) isWaterCell[i]=1;
+  }
+
+  // Pre-calculate smoothed base elevation for smoother biome transitions
+  const baseElevGrid=new Float32Array(N*N);
+  for(let i=0;i<N*N;i++){
+    const bname=biome[i];
+    baseElevGrid[i]=BIOME_BASE_ELEV[bname]||0.15;
+  }
+  const smoothedBE=new Float32Array(N*N);
+  const R=4; // Blur radius for biome transitions
+  for(let iz=0;iz<N;iz++){
+    for(let ix=0;ix<N;ix++){
+      let sum=0,count=0;
+      for(let rz=-R;rz<=R;rz++){
+        const nz=iz+rz; if(nz<0||nz>=N) continue;
+        for(let rx=-R;rx<=R;rx++){
+          const nx=ix+rx; if(nx<0||nx>=N) continue;
+          sum+=baseElevGrid[nz*N+nx];
+          count++;
+        }
+      }
+      smoothedBE[iz*N+ix]=sum/count;
+    }
+    if(iz%256===0) await tick();
+  }
+
+  // Compute land heights first (water cells get placeholder 1)
+  for(let i=0;i<N*N;i++){
+    if(isWaterCell[i]){heightVox[i]=1;continue;}
+    const be=smoothedBE[i];
+    // Smoother terrain calculation
+    const h=clamp(g.elev[i]*0.60+be*0.25+fbmH[i]*0.15,0.01,1.0); 
+    heightVox[i]=Math.max(1,Math.round(h*maxVox));
+  }
+
+  // ── LAKE LEVELS: BFS flood-fill each lake region ─────────────────────────
+  // For each connected lake region find the minimum land-neighbor height → waterLevel
+  const lakeLevel=new Float32Array(N*N).fill(-1); // -1 = not a lake
+  const visited=new Uint8Array(N*N);
+  const DIRS4=[[-1,0],[1,0],[0,-1],[0,1]];
+
+  for(let startI=0;startI<N*N;startI++){
+    if(!isLakeCell[startI]||visited[startI]) continue;
+    // BFS to collect region
+    const region=[];
+    const queue=[startI];
+    visited[startI]=1;
+    while(queue.length){
+      const ci=queue.shift();
+      region.push(ci);
+      const cx=ci%N, cz=(ci/N)|0;
+      for(const[dx,dz] of DIRS4){
+        const nx=cx+dx,nz=cz+dz;
+        if(nx<0||nx>=N||nz<0||nz>=N) continue;
+        const ni=nz*N+nx;
+        if(visited[ni]) continue;
+        visited[ni]=1;
+        if(isLakeCell[ni]) queue.push(ni);
+      }
+    }
+    // Find minimum land-neighbor height around entire region
+    let minBoundary=maxVox;
+    for(const ci of region){
+      const cx=ci%N, cz=(ci/N)|0;
+      for(const[dx,dz] of DIRS4){
+        const nx=cx+dx,nz=cz+dz;
+        if(nx<0||nx>=N||nz<0||nz>=N) continue;
+        const ni=nz*N+nx;
+        if(!isWaterCell[ni]){
+          minBoundary=Math.min(minBoundary,heightVox[ni]);
+        }
+      }
+    }
+    // Water surface sits at top of lowest boundary block
+    const wSurface=Math.max(1,minBoundary);
+    for(const ci of region) lakeLevel[ci]=wSurface;
+  }
+
+  // ── RIVER HEIGHTS: smooth elevation downhill along river network ──────────
+  // Strategy: assign raw elevation-based height to each river cell,
+  // then do multiple downhill-propagation passes so water always flows to lower.
+  const riverHeight=new Float32Array(N*N).fill(-1);
+  for(let i=0;i<N*N;i++){
+    if(!isRiverCell[i]) continue;
+    const be=BIOME_BASE_ELEV['river']||0.06;
+    const raw=clamp(g.elev[i]*0.65+be*0.15+fbmH[i]*0.08,0.01,1.0);
+    riverHeight[i]=Math.max(1,Math.round(raw*maxVox));
+  }
+  // 8 relaxation passes: each river cell takes the min of self and lower neighbors
+  for(let pass=0;pass<8;pass++){
+    for(let iz=0;iz<N;iz++) for(let ix=0;ix<N;ix++){
+      const i=iz*N+ix;
+      if(riverHeight[i]<0) continue;
+      for(const[dx,dz] of DIRS4){
+        const nx=ix+dx,nz=iz+dz;
+        if(nx<0||nx>=N||nz<0||nz>=N) continue;
+        const ni=nz*N+nx;
+        // propagate downhill from land neighbors and other river cells
+        const nH=riverHeight[ni]>=0?riverHeight[ni]:(!isWaterCell[ni]?heightVox[ni]:9999);
+        if(nH<riverHeight[i]) riverHeight[i]=Math.max(1,nH);
+      }
+    }
+  }
+  // Clamp river so it never exceeds its adjacent land (no floating rivers)
+  for(let iz=0;iz<N;iz++) for(let ix=0;ix<N;ix++){
+    const i=iz*N+ix;
+    if(riverHeight[i]<0) continue;
+    let minLand=maxVox;
+    for(const[dx,dz] of DIRS4){
+      const nx=ix+dx,nz=iz+dz;
+      if(nx<0||nx>=N||nz<0||nz>=N) continue;
+      const ni=nz*N+nx;
+      if(!isWaterCell[ni]) minLand=Math.min(minLand,heightVox[ni]);
+    }
+    riverHeight[i]=Math.min(riverHeight[i],minLand);
+  }
+
+  setStage('Initialising WebGL…',40);await tick();
+
+  // Clean up old renderer
+  if(renderer){cancelAnimationFrame(animId);renderer.dispose();}
+
+  const canvas=document.getElementById('threeCanvas');
+  renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  renderer.setSize(window.innerWidth,window.innerHeight);
+  renderer.setClearColor(0x87ceeb); // Light sky blue
+  renderer.sortObjects=true;
+
+  scene=new THREE.Scene();
+  // Fog disabled as per request
+  // scene.fog=new THREE.FogExp2(0x87ceeb, 0.00001); 
+
+  camera=new THREE.PerspectiveCamera(65,window.innerWidth/window.innerHeight,1,500000); // Massive render distance
+
+  // Lighting
+  scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+  const sun=new THREE.DirectionalLight(0xffffff, 0.8);
+  sun.position.set(0.7,1.0,0.5).normalize();
+  scene.add(sun);
+  const fill=new THREE.DirectionalLight(0xffffff, 0.3);
+  fill.position.set(-1,-0.2,-0.6).normalize();
+  scene.add(fill);
+
+  // Sky sphere
+  const skyMat=new THREE.MeshBasicMaterial({color:0x87ceeb,side:THREE.BackSide});
+  scene.add(new THREE.Mesh(new THREE.SphereGeometry(400000,8,6),skyMat)); // Much larger sky sphere
+
+  // ── Build land voxels (skip all water cells) ──────────────────────────────
+  setStage('Counting instances…',45);await tick();
+  const biomeCounts={};
+  for(let i=0;i<N*N;i++){
+    if(isWaterCell[i]) continue; // water handled separately
+    const b=biome[i];
+    biomeCounts[b]=(biomeCounts[b]||0)+1;
+  }
+
+  const BOX=new THREE.BoxGeometry(1,1,1);
+  const meshMap={};
+  const cursorMap={};
+  const dummy=new THREE.Object3D();
+  const half=N*0.5;
+
+  for(const[bname,count] of Object.entries(biomeCounts)){
+    if(!count) continue;
+    const def=BIOME[bname]||BIOME.grassland;
+    let [r,gv,b]=def;
+    if(satMul!==1.0){const gr=(r+gv+b)/3;r=clamp(gr+(r-gr)*satMul,0,255);gv=clamp(gr+(gv-gr)*satMul,0,255);b=clamp(gr+(b-gr)*satMul,0,255);}
+    const col=new THREE.Color(r/255,gv/255,b/255);
+    const mat=new THREE.MeshLambertMaterial({color:col});
+    const mesh=new THREE.InstancedMesh(BOX,mat,count);
+    mesh.frustumCulled=false;
+    scene.add(mesh);
+    meshMap[bname]=mesh;
+    cursorMap[bname]=0;
+  }
+
+  setStage('Placing voxels…',50);await tick();
+  for(let iz=0;iz<N;iz++){
+    for(let ix=0;ix<N;ix++){
+      const idx=iz*N+ix;
+      if(isWaterCell[idx]) continue;
+      const bname=biome[idx];
+      const scaleXZ = 500;
+      const scaleY = 280;
+      const hv=heightVox[idx] * scaleY;
+      const mesh=meshMap[bname];
+      if(!mesh) continue;
+      let cur=cursorMap[bname];
+      dummy.position.set((ix-half)*2 * scaleXZ, hv*0.5*1.05, (iz-half)*2 * scaleXZ);
+      dummy.scale.set(2 * scaleXZ,hv*1.05,2 * scaleXZ);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(cur,dummy.matrix);
+      cursorMap[bname]=cur+1;
+    }
+    if(iz%128===0){
+      setStage(`Placing voxels… ${Math.round(iz/N*100)}%`,50+Math.round(iz/N*28));
+      await tick();
+    }
+  }
+  for(const[bname,mesh] of Object.entries(meshMap)){
+    mesh.count=cursorMap[bname];
+    mesh.instanceMatrix.needsUpdate=true;
+  }
+
+  // ── LAKES: transparent flat planes per lake region ────────────────────────
+  setStage('Building water surfaces…',80);await tick();
+
+  // Collect unique lake-level groups: group cells by their lakeLevel value
+  // Merge adjacent cells at the same level into one PlaneGeometry per level bucket
+  // For performance we do one instanced plane per lake cell (thin quad, Y-scaled ~0.12)
+  const lakeMat=new THREE.MeshLambertMaterial({
+    color:0x051525, transparent:true, opacity:0.95,
+    side:THREE.DoubleSide, depthWrite:false
+  });
+  // Count lake cells
+  let lakeCellCount=0;
+  for(let i=0;i<N*N;i++) if(lakeLevel[i]>=0) lakeCellCount++;
+
+  if(lakeCellCount>0){
+    const PLANE=new THREE.PlaneGeometry(1,1);
+    PLANE.rotateX(-Math.PI/2); // make it horizontal
+    const lakeMesh=new THREE.InstancedMesh(PLANE,lakeMat,lakeCellCount);
+    lakeMesh.frustumCulled=false;
+    scene.add(lakeMesh);
+    let lc=0;
+    for(let iz=0;iz<N;iz++) for(let ix=0;ix<N;ix++){
+      const i=iz*N+ix;
+      if(lakeLevel[i]<0) continue;
+      const scaleXZ = 500;
+      const scaleY = 280;
+      // Place at top of boundary height, slightly above solid block top
+      dummy.position.set((ix-half)*2 * scaleXZ, (lakeLevel[i] * scaleY) * 1.05, (iz-half)*2 * scaleXZ);
+      dummy.scale.set(2.05 * scaleXZ,1,2.05 * scaleXZ);
+      dummy.rotation.set(0,0,0);
+      dummy.updateMatrix();
+      lakeMesh.setMatrixAt(lc++,dummy.matrix);
+    }
+    lakeMesh.count=lc;
+    lakeMesh.instanceMatrix.needsUpdate=true;
+  }
+
+  // ── RIVERS: stepped flat quads following terrain downhill ─────────────────
+  const riverMat=new THREE.MeshLambertMaterial({
+    color:0x051525, transparent:true, opacity:0.98,
+    side:THREE.DoubleSide, depthWrite:false
+  });
+  let riverCellCount=0;
+  for(let i=0;i<N*N;i++) if(riverHeight[i]>=0) riverCellCount++;
+
+  if(riverCellCount>0){
+    const PLANE2=new THREE.PlaneGeometry(1,1);
+    PLANE2.rotateX(-Math.PI/2);
+    const riverMesh=new THREE.InstancedMesh(PLANE2,riverMat,riverCellCount);
+    riverMesh.frustumCulled=false;
+    scene.add(riverMesh);
+    let rc=0;
+    for(let iz=0;iz<N;iz++) for(let ix=0;ix<N;ix++){
+      const i=iz*N+ix;
+      if(riverHeight[i]<0) continue;
+      const scaleXZ = 500;
+      const scaleY = 280;
+      dummy.position.set((ix-half)*2 * scaleXZ, (riverHeight[i] * scaleY) * 1.05 + 0.05, (iz-half)*2 * scaleXZ);
+      dummy.scale.set(2.05 * scaleXZ,1,2.05 * scaleXZ);
+      dummy.rotation.set(0,0,0);
+      dummy.updateMatrix();
+      riverMesh.setMatrixAt(rc++,dummy.matrix);
+    }
+    riverMesh.count=rc;
+    riverMesh.instanceMatrix.needsUpdate=true;
+  }
+
+  setStage('Done ✓',100);await tick();
+
+  // Camera start: above and back
+  const scaleY = 280;
+  const scaleXZ = 500;
+  camera.position.set(
+   0,
+   maxVox * scaleY * 15, // Much higher
+   N * scaleXZ * 3 // Much further back
+ );
+  camera.lookAt(0,maxVox*0.3*1.05,0);
+
+  // Show
+  document.getElementById('prog').style.display='none';
+  document.getElementById('setup').style.display='none';
+  document.getElementById('viewport').style.display='block';
+  document.getElementById('hud').style.display='block';
+  document.getElementById('renderBtn').disabled=false;
+
+  initOrbit(N,maxVox);
+  startLoop();
+
+  window.addEventListener('resize',onResize);
+}
+
+function onResize(){
+  if(!renderer) return;
+  camera.aspect=window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth,window.innerHeight);
+}
+
+// ══════════════════════════════════════════════════════
+// RENDER LOOP
+// ══════════════════════════════════════════════════════
+let flyMode=false;
+
+function startLoop(){
+  cancelAnimationFrame(animId);
+  let last=performance.now();
+  function loop(now){
+    animId=requestAnimationFrame(loop);
+    const dt=Math.min((now-last)/1000,0.1);
+    last=now;
+    if(flyMode) tickFly(dt);
+    renderer.render(scene,camera);
+  }
+  loop(performance.now());
+}
+
+// ══════════════════════════════════════════════════════
+// ORBIT CONTROLLER
+// ══════════════════════════════════════════════════════
+let oTarget=new THREE.Vector3();
+let oRadius=500,oTheta=Math.PI*0.3,oPhi=Math.PI*0.28;
+let oDrag=false,oPan=false,oLastX=0,oLastY=0,oPanX=0,oPanY=0;
+
+function initOrbit(N,maxVox){
+  oTarget.set(0,maxVox*0.3*1.05,0);
+  oRadius=N*0.7*2;
+  oTheta=Math.PI*0.25;
+  oPhi=Math.PI*0.28;
+  syncOrbit();
+}
+function syncOrbit(){
+  oPhi=clamp(oPhi,0.04,Math.PI*0.48);
+  camera.position.set(
+    oTarget.x+oRadius*Math.sin(oPhi)*Math.sin(oTheta),
+    oTarget.y+oRadius*Math.cos(oPhi),
+    oTarget.z+oRadius*Math.sin(oPhi)*Math.cos(oTheta)
+  );
+  camera.lookAt(oTarget);
+}
+
+const cvs=document.getElementById('threeCanvas');
+cvs.addEventListener('contextmenu',e=>e.preventDefault());
+cvs.addEventListener('mousedown',e=>{
+  if(flyMode) return;
+  if(e.button===0){oDrag=true;oLastX=e.clientX;oLastY=e.clientY;}
+  if(e.button===2){oPan=true;oPanX=e.clientX;oPanY=e.clientY;}
+});
+window.addEventListener('mousemove',e=>{
+  if(flyMode) return;
+  if(oDrag){
+    oTheta-=(e.clientX-oLastX)*0.006;
+    oPhi  -=(e.clientY-oLastY)*0.006;
+    oLastX=e.clientX;oLastY=e.clientY;
+    syncOrbit();
+  }
+  if(oPan){
+    const spd=oRadius*0.0012;
+    const right=new THREE.Vector3();
+    right.crossVectors(new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion),new THREE.Vector3(0,1,0)).normalize();
+    // pan in world XZ + Y
+    const fwd=new THREE.Vector3();
+    camera.getWorldDirection(fwd);fwd.y=0;fwd.normalize();
+    oTarget.addScaledVector(right,-(e.clientX-oPanX)*spd);
+    oTarget.y+=(e.clientY-oPanY)*spd;
+    oPanX=e.clientX;oPanY=e.clientY;
+    syncOrbit();
+  }
+});
+window.addEventListener('mouseup',e=>{
+  if(e.button===0)oDrag=false;
+  if(e.button===2)oPan=false;
+});
+cvs.addEventListener('wheel',e=>{
+  if(flyMode) return;
+  e.preventDefault();
+  oRadius*=1+e.deltaY*0.001;
+  oRadius=clamp(oRadius,5,6000);
+  syncOrbit();
+},{passive:false});
+
+// ══════════════════════════════════════════════════════
+// FLY CONTROLLER
+// ══════════════════════════════════════════════════════
+const keys={};
+let flyYaw=0,flyPitch=0,flyBaseSpeed=800; // 10x speed increase
+
+document.addEventListener('keydown',e=>{keys[e.code]=true;});
+document.addEventListener('keyup',  e=>{keys[e.code]=false;});
+
+document.getElementById('modeBtn').addEventListener('click',toggleMode);
+function toggleMode(){flyMode?exitFly():enterFly();}
+
+function enterFly(){
+  flyMode=true;
+  const d=new THREE.Vector3();
+  camera.getWorldDirection(d);
+  flyYaw=Math.atan2(d.x,d.z);
+  flyPitch=Math.asin(clamp(d.y,-1,1));
+  document.getElementById('modeBtn').textContent='Switch to Orbit';
+  document.getElementById('modeLbl').textContent='FLY MODE';
+  document.getElementById('crosshair').style.display='block';
+  cvs.requestPointerLock();
+}
+function exitFly(){
+  flyMode=false;
+  document.getElementById('modeBtn').textContent='Switch to Fly';
+  document.getElementById('modeLbl').textContent='ORBIT MODE';
+  document.getElementById('crosshair').style.display='none';
+  if(document.pointerLockElement===cvs) document.exitPointerLock();
+  // Re-sync orbit around current position
+  const d=new THREE.Vector3().subVectors(camera.position,oTarget);
+  oRadius=d.length();
+  if(oRadius<1)oRadius=1;
+  oPhi=Math.acos(clamp(d.y/oRadius,-1,1));
+  oTheta=Math.atan2(d.x,d.z);
+}
+
+document.addEventListener('pointerlockchange',()=>{
+  if(document.pointerLockElement!==cvs && flyMode) exitFly();
+});
+cvs.addEventListener('click',()=>{
+  if(flyMode && document.pointerLockElement!==cvs) cvs.requestPointerLock();
+});
+document.addEventListener('mousemove',e=>{
+  if(!flyMode||document.pointerLockElement!==cvs) return;
+  flyYaw  -=e.movementX*0.002;
+  flyPitch =clamp(flyPitch-e.movementY*0.002,-Math.PI*0.48,Math.PI*0.48);
+});
+
+function tickFly(dt){
+  const spd=flyBaseSpeed*(keys['ShiftLeft']||keys['ShiftRight']?10:1)*dt; // 10x sprint multiplier
+  const fwd=new THREE.Vector3(
+    Math.sin(flyYaw)*Math.cos(flyPitch),
+    Math.sin(flyPitch),
+    Math.cos(flyYaw)*Math.cos(flyPitch)
+  );
+  const right=new THREE.Vector3(Math.cos(flyYaw),0,-Math.sin(flyYaw));
+  if(keys['KeyW']||keys['ArrowUp'])    camera.position.addScaledVector(fwd,spd);
+  if(keys['KeyS']||keys['ArrowDown'])  camera.position.addScaledVector(fwd,-spd);
+  if(keys['KeyA']||keys['ArrowLeft'])  camera.position.addScaledVector(right,-spd);
+  if(keys['KeyD']||keys['ArrowRight']) camera.position.addScaledVector(right,spd);
+  if(keys['KeyE']||keys['Space'])      camera.position.y+=spd;
+  if(keys['KeyQ']||keys['ControlLeft'])camera.position.y-=spd;
+  camera.rotation.order='YXZ';
+  camera.rotation.y=flyYaw;
+  camera.rotation.x=flyPitch;
+}
+</script>
+</body>
+</html>

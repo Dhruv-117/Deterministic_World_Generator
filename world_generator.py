@@ -108,6 +108,8 @@ BIOME_CATEGORIES = {
     'meadow': 'plains',
     'steppe': 'plains',
     'savanna': 'plains',
+    'coast': 'plains',
+    'beach': 'plains',
     # Forests
     'temperate_forest': 'forests',
     'woodland': 'forests',
@@ -134,7 +136,7 @@ BIOME_CATEGORIES = {
 
 EXPANDED_REQUIRED_BIOMES = [
     # Plains
-    'grassland', 'meadow', 'steppe', 'savanna',
+    'grassland', 'meadow', 'steppe', 'savanna', 'coast', 'beach',
     # Forests
     'temperate_forest', 'woodland', 'tropical_forest', 'rainforest',
     # Deserts
@@ -160,9 +162,13 @@ ELEVATION_RESHAPE_MAX_DELTA = 0.27
 
 # Smooth transitions and local relief controls
 ELEVATION_BIOME_TRANSITION_SIGMA = 1.35
+ELEVATION_TRANSITION_SMOOTHSTEP_WIDTH = 4.8
 ELEVATION_RELIEF_BASE_SIGMA = 1.25
 ELEVATION_RELIEF_BLEND = 0.58
 ELEVATION_FINAL_SMOOTH_BLEND = 0.05
+ELEVATION_SLOPE_LIMIT = 0.18
+ELEVATION_HYDRAULIC_PASSES = 2
+ELEVATION_HYDRAULIC_EROSION_RATE = 0.16
 MOUNTAIN_RANGE_CARVE_STRENGTH = 0.56
 BIOME_STRUCTURE_CARVE_STRENGTH = 0.15
 MOUNTAIN_FOOTHILL_RADIUS = 10.0
@@ -173,6 +179,23 @@ MOUNTAIN_MEGA_SYSTEM_THRESHOLD = 420
 MOUNTAIN_BRANCH_CHAIN_STRENGTH = 0.32
 MOUNTAIN_VALLEY_MEANDER_STRENGTH = 0.38
 MOUNTAIN_ARCHETYPE_ELONGATION_BIAS = 2.1
+MOUNTAIN_GHAT_ESCARPMENT_STRENGTH = 0.34
+MOUNTAIN_RANGE_MIX_STRENGTH = 0.36
+MOUNTAIN_INDIVIDUAL_GROUP_STRENGTH = 0.30
+MOUNTAIN_PLATEAU_VALLEY_STRENGTH = 0.32
+MOUNTAIN_DOMAIN_WARP_STRENGTH = 3.2
+MOUNTAIN_SPIKE_SUPPRESS_STRENGTH = 0.34
+MOUNTAIN_SPIKE_PROM_THRESH = 0.10
+COAST_SHAPE_STRENGTH = 0.12
+COAST_TRANSITION_SIGMA = 1.10
+COAST_PRESERVE_RATIO = 0.44
+COAST_MAX_LOCAL_DELTA = 0.055
+COAST_SPIKE_SUPPRESS_STRENGTH = 0.38
+COAST_SPIKE_PROM_THRESH = 0.045
+ISLAND_SPIKE_SUPPRESS_STRENGTH = 0.62
+ISLAND_EDGE_SMOOTH_SIGMA = 1.15
+BEACH_SHORE_FLAT_BLEND = 0.56
+BEACH_SHORE_RAMP_BLEND = 0.32
 
 # Hydrology protection while reshaping
 ELEVATION_RIVER_CHANNEL_PRESERVE = 0.72
@@ -204,6 +227,8 @@ BIOME_ELEVATION_PROFILES = {
     'steppe': {'level': 0.50, 'relief': 0.78},
     'savanna': {'level': 0.47, 'relief': 0.74},
     'temperate_forest': {'level': 0.56, 'relief': 0.80},
+        'coast': {'level': 0.41, 'relief': 0.56},
+        'beach': {'level': 0.37, 'relief': 0.44},
     'woodland': {'level': 0.54, 'relief': 0.76},
     'tropical_forest': {'level': 0.52, 'relief': 0.74},
     'rainforest': {'level': 0.50, 'relief': 0.70},
@@ -660,11 +685,12 @@ def determine_boundary_type(plate_map, plate_vectors, width, height):
 # ELEVATION GENERATION
 # =============================================================================
 def generate_elevation(width, height, seed, plate_map, convergent_boundaries, plate_types, num_plates):
-    """Generate elevation with tectonic influence."""
+    """Generate elevation with macro→meso→micro tectonic layering."""
     noise_gen = SeededNoiseGenerator(seed + 1000)
-    
-    heightmap = generate_heightmap_noise(width, height, noise_gen, scale=60.0, octaves=6)
-    heightmap = (heightmap - heightmap.min()) / (heightmap.max() - heightmap.min())
+
+    # Macro: continental backbone and broad terrain undulation.
+    macro_noise = generate_heightmap_noise(width, height, noise_gen, scale=72.0, octaves=5)
+    macro_noise = (macro_noise - macro_noise.min()) / max(1e-6, (macro_noise.max() - macro_noise.min()))
     
     continental_bonus = np.zeros((height, width))
     for plate_id in range(num_plates):
@@ -672,15 +698,61 @@ def generate_elevation(width, height, seed, plate_map, convergent_boundaries, pl
         if plate_types[plate_id] in ['continental', 'continental_small']:
             bonus = 0.3 if plate_types[plate_id] == 'continental' else 0.15
             continental_bonus[mask] = bonus
+    macro_continent = ndimage.gaussian_filter(continental_bonus.astype(np.float32), sigma=7.0)
+    macro_continent = (macro_continent - macro_continent.min()) / max(1e-6, (macro_continent.max() - macro_continent.min()))
     
     boundary_uplift = np.zeros((height, width))
     convergent_expanded = ndimage.binary_dilation(convergent_boundaries, iterations=3)
     boundary_uplift[convergent_expanded] = 0.25
     boundary_uplift[convergent_boundaries] = 0.4
     boundary_uplift = ndimage.gaussian_filter(boundary_uplift, sigma=2)
+
+    # Meso: tectonic chains and warped ridge systems (small/medium/large mixed frequencies).
+    yy, xx = np.indices((height, width), dtype=np.float32)
+    warp_x = ndimage.gaussian_filter(
+        np.array([[noise_gen.perlin_like(x, y, scale=34.0, octaves=2, persistence=0.6) for x in range(width)] for y in range(height)], dtype=np.float32),
+        sigma=1.2,
+    )
+    warp_y = ndimage.gaussian_filter(
+        np.array([[noise_gen.simplex_like(x + 317, y + 911, scale=31.0, octaves=2, persistence=0.6) for x in range(width)] for y in range(height)], dtype=np.float32),
+        sigma=1.2,
+    )
+    wx = xx + warp_x * 4.0
+    wy = yy + warp_y * 4.0
+
+    ridge_large = np.clip(1.0 - np.abs(np.sin(wx / 19.0 + wy / 27.0)), 0.0, 1.0) ** 1.45
+    ridge_mid = np.clip(1.0 - np.abs(np.sin(wx / 11.0 + wy / 13.0)), 0.0, 1.0) ** 1.62
+    ridge_small = np.clip(1.0 - np.abs(np.sin(wx / 6.5 + wy / 7.7)), 0.0, 1.0) ** 1.92
+    ridge_mix = ridge_large * 0.56 + ridge_mid * 0.30 + ridge_small * 0.14
+    ridge_mix = ndimage.gaussian_filter(ridge_mix.astype(np.float32), sigma=0.9)
+
+    # Micro: small relief/erosion detail to avoid flat shelves.
+    micro_noise = np.zeros((height, width), dtype=np.float32)
+    for y in range(height):
+        for x in range(width):
+            micro_noise[y, x] = (
+                0.60 * noise_gen.simplex_like(x, y, scale=14.0, octaves=3, persistence=0.55)
+                + 0.40 * noise_gen.perlin_like(x, y, scale=9.0, octaves=2, persistence=0.60)
+            )
+    micro_noise = (micro_noise - micro_noise.min()) / max(1e-6, (micro_noise.max() - micro_noise.min()))
+
+    # Compose layered terrain: macro continent + meso mountain systems + micro details.
+    heightmap = (
+        macro_noise * 0.46
+        + macro_continent * 0.28
+        + boundary_uplift * 0.18
+        + ridge_mix * 0.22
+        + micro_noise * 0.08
+    )
     
-    heightmap = heightmap + continental_bonus + boundary_uplift
-    heightmap = (heightmap - heightmap.min()) / (heightmap.max() - heightmap.min())
+    # Soft erosion-like micro carving for natural valleys/plateaus before normalization.
+    broad_base = ndimage.gaussian_filter(heightmap.astype(np.float32), sigma=2.3)
+    incision = np.clip(broad_base - heightmap, 0.0, None)
+    plateau_gate = np.clip((heightmap - np.percentile(heightmap, 78)) / max(1e-6, (1.0 - np.percentile(heightmap, 78))), 0.0, 1.0)
+    plateau_target = ndimage.gaussian_filter(heightmap.astype(np.float32), sigma=1.6)
+    heightmap = heightmap - incision * 0.18
+    heightmap = heightmap * (1.0 - plateau_gate * 0.24) + plateau_target * (plateau_gate * 0.24)
+    heightmap = (heightmap - heightmap.min()) / max(1e-6, (heightmap.max() - heightmap.min()))
     
     return heightmap
 
@@ -1238,6 +1310,8 @@ EXPANDED_BIOME_COLORS = {
     'meadow': '#a8d96f',
     'steppe': '#bfa062',
     'savanna': '#cdbb55',
+    'coast': '#9dc5a2',
+    'beach': '#f1dcb5',
     
     # Forest biomes
     'temperate_forest': '#3f8f3a',
@@ -1413,6 +1487,8 @@ def assign_expanded_biome(temp, moist, elev, slope, roughness, dist_river, dist_
         # Snow hills: cold
         if temp < t['temp_cool']:
             return 'snow_hills'
+        if near_coast and temp >= t['temp_cool'] and rv < 0.28:
+            return 'coast'
         # Forest hills: high moisture, moderate temp
         if moist > t['moist_wet'] and temp >= t['temp_cool']:
             return 'forest_hills'
@@ -1476,6 +1552,48 @@ def assign_expanded_biome(temp, moist, elev, slope, roughness, dist_river, dist_
         and rv < 0.74
     ):
         return 'oasis'
+
+    # Selective coastal biome logic: only some coastline segments become coast/beach.
+    # This prevents painting all ocean-touching land as coastal biomes.
+    coastal_band = near_coast and not deep_inland
+    beach_landform_ok = (landform == 'plains') or (landform == 'hills' and slope < t['slope_gentle'] * 1.35)
+    if coastal_band and beach_landform_ok:
+        beach_candidate = (
+            d_ocean < 5.0
+            and not very_near_river
+            and low_relief
+            and roughness < t['rough_moderate'] * 0.98
+            and moist > t['moist_arid'] * 0.60
+            and moist < t['moist_wet'] * 1.08
+            and temp > t['temp_cold'] * 0.90
+        )
+        if beach_candidate:
+            beach_prob = np.clip(
+                0.36
+                + 0.18 * np.clip((t['rough_moderate'] - roughness) / max(1e-6, t['rough_moderate']), 0.0, 1.0)
+                + 0.08 * np.clip((t['slope_gentle'] - slope) / max(1e-6, t['slope_gentle']), 0.0, 1.0),
+                0.32,
+                0.74,
+            )
+            if rv < beach_prob:
+                return 'beach'
+
+        coast_candidate = (
+            near_coast
+            and (roughness > t['rough_smooth'] * 0.72 or moist > t['moist_moderate'] * 0.86 or slope > t['slope_flat'] * 0.88)
+            and temp > t['temp_cold'] * 0.86
+            and moist < t['moist_very_wet'] * 1.20
+        )
+        if coast_candidate:
+            coast_prob = np.clip(
+                0.20
+                + 0.12 * np.clip((roughness - t['rough_smooth']) / max(1e-6, (t['rough_rough'] - t['rough_smooth'])), 0.0, 1.0)
+                + 0.08 * np.clip((t['moist_wet'] - moist) / max(1e-6, t['moist_wet']), 0.0, 1.0),
+                0.18,
+                0.58,
+            )
+            if rv < coast_prob:
+                return 'coast'
     
     # Desert biomes (hot and dry)
     if temp > t['temp_warm'] and moist < t['moist_dry'] and (inland or mountain_shadow_interior):
@@ -1662,7 +1780,7 @@ def enforce_expanded_biome_presence(biomes, land_mask, landforms, temperature, m
         very_near_river = dist_river < 1.4
         near_river = dist_river < 2.8
         near_coast = dist_ocean < 8.0
-        very_near_coast = dist_ocean < 3.0
+        very_near_coast = dist_ocean < 5.2
         inland = dist_ocean > 10.0
         deep_inland = dist_ocean > 24.0
         foothills = (dist_mountain < 7.0) | (dist_hills < 4.0)
@@ -1680,6 +1798,29 @@ def enforce_expanded_biome_presence(biomes, land_mask, landforms, temperature, m
         elif target_biome == 'savanna':
             mask &= plains & (temperature > t['temp_warm']) & (moisture > t['moist_dry']) & (moisture < t['moist_wet'])
             score = temperature - np.abs(moisture - (t['moist_dry'] + t['moist_moderate']) * 0.5)
+        elif target_biome == 'coast':
+            mask &= plains & near_coast & (temperature > t['temp_cold'] * 0.86) & (moisture < t['moist_very_wet'] * 1.05)
+            score = (
+                np.exp(-dist_ocean / 3.8)
+                + 0.30 * np.clip(roughness / max(1e-6, t['rough_rough']), 0.0, 1.0)
+                + 0.20 * np.clip((t['moist_wet'] - moisture) / max(1e-6, t['moist_wet']), 0.0, 1.0)
+            )
+        elif target_biome == 'beach':
+            mask &= (
+                (plains | (hills & low_relief & (roughness < t['rough_moderate'] * 1.04)))
+                & very_near_coast
+                & (~very_near_river)
+                & low_relief
+                & (roughness < t['rough_moderate'] * 1.02)
+                & (moisture > t['moist_arid'] * 0.55)
+                & (moisture < t['moist_wet'] * 1.10)
+                & (temperature > t['temp_cold'] * 0.90)
+            )
+            score = (
+                np.exp(-dist_ocean / 3.2)
+                + 0.35 * np.clip((t['rough_moderate'] - roughness) / max(1e-6, t['rough_moderate']), 0.0, 1.0)
+                + 0.20 * np.clip((t['slope_gentle'] - slope) / max(1e-6, t['slope_gentle']), 0.0, 1.0)
+            )
         elif target_biome == 'temperate_forest':
             mask &= plains & (temperature >= t['temp_cool']) & (temperature <= t['temp_hot']) & (moisture > t['moist_wet'])
             score = moisture + 0.20 * foothills
@@ -1830,6 +1971,117 @@ def enforce_expanded_biome_presence(biomes, land_mask, landforms, temperature, m
             if fallback_oasis[oy, ox]:
                 biomes[oy, ox] = 'oasis'
 
+    # Natural beach generation: variable-size/shape coastal patches with deterministic noise.
+    beach_zone = effective_land & (landforms == 'plains') & (dist_ocean < 5.8) & (~is_river)
+    if beach_zone.any():
+        current_beach = int(((biomes == 'beach') & beach_zone).sum())
+
+        variable_ratio = float(rng.uniform(0.044, 0.078))
+        target_beach = max(160, int(variable_ratio * beach_zone.sum()))
+        deficit = target_beach - current_beach
+
+        if deficit > 0:
+            coast_prox = np.exp(-dist_ocean / 3.3)
+            slope_fit = np.clip((t['slope_gentle'] * 1.22 - slope) / max(1e-6, t['slope_gentle'] * 1.22), 0.0, 1.0)
+            rough_fit = np.clip((t['rough_moderate'] * 1.18 - roughness) / max(1e-6, t['rough_moderate'] * 1.18), 0.0, 1.0)
+            temp_fit = np.clip((temperature - t['temp_cold'] * 0.82) / max(1e-6, t['temp_warm'] * 1.12 - t['temp_cold'] * 0.82), 0.0, 1.0)
+            moist_fit = np.clip((t['moist_wet'] * 1.24 - moisture) / max(1e-6, t['moist_wet'] * 1.24), 0.0, 1.0)
+
+            base_suitability = (
+                coast_prox * 0.46
+                + slope_fit * 0.22
+                + rough_fit * 0.20
+                + (temp_fit * moist_fit) * 0.12
+            )
+
+            noise_field = ndimage.gaussian_filter(rng.random(base_suitability.shape, dtype=np.float32), sigma=1.8)
+            suitability = np.clip(base_suitability * 0.80 + noise_field * 0.20, 0.0, 1.0)
+
+            beach_mask, _beach_score = choose_candidates('beach')
+            candidate = beach_zone & (biomes != 'beach')
+            candidate &= np.isin(
+                biomes,
+                [
+                    'coast', 'grassland', 'meadow', 'savanna', 'steppe', 'woodland',
+                    'grassy_hills', 'forest_hills', 'rocky_hills', 'snow_hills',
+                    'sand_desert', 'rock_desert'
+                ]
+            )
+            if candidate.any():
+                candidate &= (suitability > 0.26) | beach_mask
+            if candidate.any():
+                combined = suitability
+                cy, cx = np.where(candidate)
+                cs = combined[cy, cx]
+                order = np.argsort(cs)[::-1]
+
+                anchor_count = int(np.clip(6 + deficit // 14, 6, 56))
+                anchor_take = min(anchor_count, len(order))
+                placed = 0
+                taken = np.zeros_like(candidate, dtype=bool)
+
+                for idx in range(anchor_take):
+                    ay, ax = int(cy[order[idx]]), int(cx[order[idx]])
+                    if taken[ay, ax]:
+                        continue
+
+                    theta = float(rng.uniform(0.0, np.pi))
+                    radius_x = float(rng.uniform(1.8, 8.6))
+                    radius_y = float(rng.uniform(0.9, 4.6))
+
+                    y0 = max(0, int(np.floor(ay - radius_y * 2.5)))
+                    y1 = min(biomes.shape[0], int(np.ceil(ay + radius_y * 2.5 + 1)))
+                    x0 = max(0, int(np.floor(ax - radius_x * 2.5)))
+                    x1 = min(biomes.shape[1], int(np.ceil(ax + radius_x * 2.5 + 1)))
+                    yy, xx = np.mgrid[y0:y1, x0:x1]
+
+                    dx = xx - ax
+                    dy = yy - ay
+                    c = np.cos(theta)
+                    s = np.sin(theta)
+                    xr = c * dx + s * dy
+                    yr = -s * dx + c * dy
+                    ell = (xr / max(1e-6, radius_x)) ** 2 + (yr / max(1e-6, radius_y)) ** 2
+
+                    local_candidate = candidate[y0:y1, x0:x1]
+                    local_suit = suitability[y0:y1, x0:x1]
+                    patch_mask = local_candidate & (ell <= 1.0) & (local_suit > 0.25)
+                    if not patch_mask.any():
+                        continue
+
+                    py, px = np.where(patch_mask)
+                    for j in range(len(py)):
+                        gy, gx = y0 + int(py[j]), x0 + int(px[j])
+                        biomes[gy, gx] = 'beach'
+                        taken[gy, gx] = True
+                        placed += 1
+                        if placed >= deficit:
+                            break
+                    if placed >= deficit:
+                        break
+
+                # Ensure visible shoreline beaches (touching coast/ocean edge) and organic continuity.
+                shore_pref = (
+                    beach_zone
+                    & (dist_ocean <= 1.8)
+                    & (~is_river)
+                    & np.isin(biomes, ['coast', 'grassland', 'meadow', 'woodland', 'grassy_hills'])
+                )
+                if shore_pref.any():
+                    shore_rand = rng.random(biomes.shape)
+                    shore_add = shore_pref & (shore_rand < 0.55)
+                    biomes[shore_add] = 'beach'
+
+                beach_now = (biomes == 'beach') & beach_zone
+                if beach_now.any():
+                    beach_soft = ndimage.gaussian_filter(beach_now.astype(np.float32), sigma=1.0)
+                    organic_expand = beach_zone & (beach_soft > 0.42) & (~is_river)
+                    organic_expand &= np.isin(
+                        biomes,
+                        ['coast', 'grassland', 'meadow', 'savanna', 'steppe', 'woodland', 'grassy_hills', 'forest_hills']
+                    )
+                    biomes[organic_expand] = 'beach'
+
     return biomes
 
 def smooth_expanded_biomes(biomes, land_mask, temperature, moisture, elevation,
@@ -1843,7 +2095,8 @@ def smooth_expanded_biomes(biomes, land_mask, temperature, moisture, elevation,
     rng = np.random.default_rng(seed + 7100)
     rare_sensitive_biomes = {
         'oasis', 'mangrove', 'rainforest', 'meadow', 'savanna',
-        'swamp', 'marsh', 'glacier', 'alpine_meadows', 'snow_hills'
+        'swamp', 'marsh', 'glacier', 'alpine_meadows', 'snow_hills',
+        'coast', 'beach'
     }
     
     for _ in range(num_passes):
@@ -1958,6 +2211,10 @@ def pick_biome_for_category(category, temp, moist, elev, dist_river, dist_coast,
     if category == 'plains':
         if temp < t['temp_cold']:
             return 'snow_forest' if moist > t['moist_moderate'] else 'snow_plains'
+        if dist_coast < 4.2 and dist_river > 1.3 and moist < t['moist_wet'] * 1.08 and rng.random() < 0.56:
+            return 'beach'
+        if dist_coast < 7.2 and moist < t['moist_very_wet'] * 1.18 and rng.random() < 0.46:
+            return 'coast'
         if dist_river < 2.0 and moist > t['moist_moderate'] and t['temp_cool'] <= temp <= t['temp_hot'] and rng.random() < 0.34:
             return 'meadow'
         if temp > t['temp_warm'] and moist < t['moist_moderate']:
@@ -2219,6 +2476,242 @@ def _safe_normalize(values, mask, low_pct=3, high_pct=97):
     return out
 
 
+def _smoothstep(edge0, edge1, x):
+    """GL-style smoothstep for smooth transition weighting."""
+    span = max(1e-6, float(edge1) - float(edge0))
+    t = np.clip((x - edge0) / span, 0.0, 1.0)
+    return (t * t * (3.0 - 2.0 * t)).astype(np.float32)
+
+
+def _slope_field(elevation):
+    """Compute normalized slope magnitude field (0..1) from elevation."""
+    grad_y = ndimage.sobel(elevation, axis=0, mode='reflect')
+    grad_x = ndimage.sobel(elevation, axis=1, mode='reflect')
+    slope = np.sqrt(grad_x ** 2 + grad_y ** 2).astype(np.float32)
+    p95 = float(np.percentile(slope, 95)) if slope.size > 0 else 1.0
+    if p95 <= 1e-6:
+        return np.zeros_like(slope, dtype=np.float32)
+    return np.clip(slope / p95, 0.0, 1.0).astype(np.float32)
+
+
+def _shift_array(arr, dy, dx, fill_value=0.0):
+    """Shift array with non-wrapping borders filled by fill_value."""
+    shifted = np.roll(arr, shift=(dy, dx), axis=(0, 1))
+
+    if dy > 0:
+        shifted[:dy, :] = fill_value
+    elif dy < 0:
+        shifted[dy:, :] = fill_value
+
+    if dx > 0:
+        shifted[:, :dx] = fill_value
+    elif dx < 0:
+        shifted[:, dx:] = fill_value
+
+    return shifted
+
+
+def _biome_transition_weight(biomes, land_mask, transition_width):
+    """Build smooth boundary-weight map for biome transition elevation blending."""
+    if not land_mask.any():
+        return np.zeros(biomes.shape, dtype=np.float32)
+
+    boundary = np.zeros(biomes.shape, dtype=bool)
+    for dy, dx in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+        nb = _shift_array(biomes, dy, dx, fill_value='')
+        nb_land = _shift_array(land_mask.astype(np.float32), dy, dx, fill_value=0.0) > 0.5
+        boundary |= land_mask & nb_land & (biomes != nb)
+
+    if not boundary.any():
+        return np.zeros(biomes.shape, dtype=np.float32)
+
+    dist_to_boundary = ndimage.distance_transform_edt(~boundary)
+    edge = 1.0 - _smoothstep(0.0, max(1e-6, transition_width), dist_to_boundary)
+    edge = edge * land_mask.astype(np.float32)
+    edge = ndimage.gaussian_filter(edge.astype(np.float32), sigma=max(0.7, transition_width * 0.20))
+    return np.clip(edge, 0.0, 1.0).astype(np.float32)
+
+
+def _slope_aware_hydraulic_smooth(elevation, land_mask, preserve_mask,
+                                  passes=2, slope_limit=0.18, erosion_rate=0.16):
+    """Apply slope-aware continuity smoothing with hydraulic-style transfer."""
+    out = elevation.astype(np.float32).copy()
+    if not land_mask.any() or passes <= 0:
+        return np.clip(out, 0.0, 1.0)
+
+    preserve = preserve_mask.astype(bool)
+    cardinal_dirs = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+
+    for _ in range(int(passes)):
+        base_blur = ndimage.gaussian_filter(out, sigma=0.85)
+        slope = _slope_field(out)
+
+        continuity = _smoothstep(slope_limit * 0.35, slope_limit, slope_limit - slope)
+        blend = np.clip(continuity * 0.28, 0.0, 0.28).astype(np.float32)
+        blend[~land_mask] = 0.0
+        blend[preserve] = np.minimum(blend[preserve], 0.06)
+        out = out * (1.0 - blend) + base_blur * blend
+
+        donor_loss = np.zeros_like(out, dtype=np.float32)
+        receiver_gain = np.zeros_like(out, dtype=np.float32)
+
+        for dy, dx in cardinal_dirs:
+            neigh = _shift_array(out, dy, dx, fill_value=0.0)
+            neigh_land = _shift_array(land_mask.astype(np.float32), dy, dx, fill_value=0.0) > 0.5
+
+            delta = out - neigh
+            flow = np.clip(delta - slope_limit, 0.0, None) * (erosion_rate * 0.25)
+
+            valid = land_mask & neigh_land & (~preserve)
+            flow = flow * valid.astype(np.float32)
+
+            donor_loss += flow
+            receiver_gain += _shift_array(flow, -dy, -dx, fill_value=0.0)
+
+        out = out - donor_loss + receiver_gain * 0.98
+        out[~land_mask] = elevation[~land_mask]
+
+    return np.clip(out, 0.0, 1.0).astype(np.float32)
+
+
+def _suppress_mountain_spikes(elevation, mountain_mask, strength=0.34, prominence_threshold=0.10):
+    """Suppress isolated vertical mountain spikes while preserving ridge continuity."""
+    out = elevation.astype(np.float32).copy()
+    if not mountain_mask.any() or strength <= 0.0:
+        return np.clip(out, 0.0, 1.0)
+
+    support = ndimage.gaussian_filter(mountain_mask.astype(np.float32), sigma=1.25)
+    support_mask = support > 0.02
+    if not support_mask.any():
+        return np.clip(out, 0.0, 1.0)
+
+    local_base = ndimage.gaussian_filter(out, sigma=1.05)
+    prominence = np.clip(out - local_base, 0.0, None)
+
+    masked_prom = prominence[mountain_mask]
+    if masked_prom.size == 0:
+        return np.clip(out, 0.0, 1.0)
+
+    dyn_thr = float(np.percentile(masked_prom, 93))
+    threshold = max(float(prominence_threshold), dyn_thr)
+
+    needle = np.clip((prominence - threshold) / max(1e-6, threshold * 0.95), 0.0, 1.0)
+    needle *= support
+    isolated = np.clip(needle - ndimage.gaussian_filter(needle, sigma=1.4), 0.0, 1.0)
+
+    carve = (needle * 0.68 + isolated * 0.32) * float(strength)
+    out -= carve
+
+    local_smooth = ndimage.gaussian_filter(out, sigma=0.85)
+    blend = np.clip(needle * 0.42, 0.0, 0.42)
+    out = out * (1.0 - blend) + local_smooth * blend
+
+    return np.clip(out, 0.0, 1.0).astype(np.float32)
+
+
+def _apply_coastal_micro_shaping(reshaped, base, biomes, land_mask, is_river, is_lake, seed):
+    """Apply gentle coastal shaping while preserving many coastline segments untouched."""
+    out = reshaped.astype(np.float32).copy()
+    coast_mask = land_mask & np.isin(biomes, ['coast', 'beach'])
+    if not coast_mask.any():
+        return np.clip(out, 0.0, 1.0).astype(np.float32)
+
+    coast_band = land_mask & (ndimage.distance_transform_edt(~coast_mask) <= 2.4)
+    coast_support = ndimage.gaussian_filter(coast_mask.astype(np.float32), sigma=0.95)
+    coast_support = np.clip(coast_support, 0.0, 1.0)
+
+    rng = np.random.default_rng(int(seed) + 9413)
+    preserve_noise = ndimage.gaussian_filter(rng.random(out.shape, dtype=np.float32), sigma=1.6)
+    preserve_noise = np.clip(preserve_noise, 0.0, 1.0)
+    preserve_threshold = float(np.percentile(preserve_noise[coast_mask], (1.0 - COAST_PRESERVE_RATIO) * 100.0))
+    preserve_mask = coast_mask & (preserve_noise >= preserve_threshold)
+
+    active = coast_band & (~preserve_mask) & (~is_river) & (~is_lake)
+    if active.any():
+        coast_target = ndimage.gaussian_filter(out, sigma=COAST_TRANSITION_SIGMA)
+        shape_weight = np.clip(COAST_SHAPE_STRENGTH * (0.55 + 0.45 * coast_support), 0.0, 0.22)
+        weight = np.zeros_like(out, dtype=np.float32)
+        weight[active] = shape_weight[active]
+        out = out * (1.0 - weight) + coast_target * weight
+
+        beach_mask = (biomes == 'beach') & active
+        if beach_mask.any():
+            beach_smooth = ndimage.gaussian_filter(out, sigma=0.85)
+            beach_weight = 0.18
+            out[beach_mask] = (
+                out[beach_mask] * (1.0 - beach_weight)
+                + beach_smooth[beach_mask] * beach_weight
+            )
+
+    # Beach profile shaping: flatter at shore, slight rise inland for natural shore ramps.
+    beach_all = land_mask & (biomes == 'beach') & (~is_river) & (~is_lake)
+    if beach_all.any():
+        dist_to_ocean = ndimage.distance_transform_edt(land_mask)
+        ramp = np.clip(dist_to_ocean / 4.8, 0.0, 1.0)
+        shore_flat = ndimage.gaussian_filter(out, sigma=0.95)
+        flat_w = BEACH_SHORE_FLAT_BLEND * np.clip(1.0 - ramp, 0.0, 1.0)
+        out[beach_all] = out[beach_all] * (1.0 - flat_w[beach_all]) + shore_flat[beach_all] * flat_w[beach_all]
+
+        beach_target = 0.285 + 0.095 * ramp
+        ramp_w = BEACH_SHORE_RAMP_BLEND * np.clip(0.35 + 0.65 * ramp, 0.0, 1.0)
+        out[beach_all] = out[beach_all] * (1.0 - ramp_w[beach_all]) + beach_target[beach_all] * ramp_w[beach_all]
+
+    coast_delta = out - base
+    coast_delta[coast_band] = np.clip(coast_delta[coast_band], -COAST_MAX_LOCAL_DELTA, COAST_MAX_LOCAL_DELTA)
+    out = base + coast_delta
+
+    return np.clip(out, 0.0, 1.0).astype(np.float32)
+
+
+def _suppress_coastal_island_spikes(elevation, base, land_mask, biomes, is_river, is_lake, is_island=None):
+    """Suppress abrupt elevation needles on coastal edges and islands."""
+    out = elevation.astype(np.float32).copy()
+    if not land_mask.any():
+        return np.clip(out, 0.0, 1.0).astype(np.float32)
+
+    coast_edge = land_mask & (ndimage.distance_transform_edt(land_mask) <= 2.6)
+    coast_biome = land_mask & np.isin(biomes, ['coast', 'beach', 'mangrove', 'marsh'])
+    island_mask = np.zeros_like(land_mask, dtype=bool) if is_island is None else (is_island & land_mask)
+    focus = coast_edge | coast_biome | island_mask
+    if not focus.any():
+        return np.clip(out, 0.0, 1.0).astype(np.float32)
+
+    support = ndimage.gaussian_filter(focus.astype(np.float32), sigma=1.05)
+    local_base = ndimage.gaussian_filter(out, sigma=1.10)
+    prominence = np.clip(out - local_base, 0.0, None)
+
+    prom_vals = prominence[focus]
+    if prom_vals.size == 0:
+        return np.clip(out, 0.0, 1.0).astype(np.float32)
+
+    dyn_thr = float(np.percentile(prom_vals, 86))
+    threshold = max(float(COAST_SPIKE_PROM_THRESH), dyn_thr)
+    spike = np.clip((prominence - threshold) / max(1e-6, threshold * 0.92), 0.0, 1.0)
+    spike *= support
+
+    strength_map = np.full_like(out, COAST_SPIKE_SUPPRESS_STRENGTH, dtype=np.float32)
+    if island_mask.any():
+        strength_map[island_mask] = ISLAND_SPIKE_SUPPRESS_STRENGTH
+
+    out -= spike * strength_map
+
+    local_smooth = ndimage.gaussian_filter(out, sigma=ISLAND_EDGE_SMOOTH_SIGMA)
+    blend = np.clip(spike * (0.36 + 0.38 * island_mask.astype(np.float32)), 0.0, 0.78)
+    out = out * (1.0 - blend) + local_smooth * blend
+
+    extra_smooth = ndimage.gaussian_filter(out, sigma=1.35)
+    shoreline_focus = np.clip(support * 1.1, 0.0, 1.0)
+    out = out * (1.0 - shoreline_focus * 0.22) + extra_smooth * (shoreline_focus * 0.22)
+
+    protected = is_river | is_lake
+    out[protected] = elevation[protected]
+
+    delta = out - base
+    delta[focus] = np.clip(delta[focus], -COAST_MAX_LOCAL_DELTA, COAST_MAX_LOCAL_DELTA)
+    out = base + delta
+    return np.clip(out, 0.0, 1.0).astype(np.float32)
+
+
 def _build_biome_profile_maps(biomes, land_mask):
     """Create per-tile target elevation level and relief scale maps from biome labels."""
     height, width = biomes.shape
@@ -2297,17 +2790,17 @@ def _build_mountain_structure_delta(biomes, land_mask, seed):
 
         roll = float(rng.random())
         if elongation >= MOUNTAIN_ARCHETYPE_ELONGATION_BIAS and area > 120:
-            archetype = 'ghat' if roll < 0.58 else 'range'
-        elif area > 300 and roll < 0.35:
-            archetype = 'massif'
-        elif roll < 0.64:
-            archetype = 'range'
-        elif roll < 0.84:
             archetype = 'ghat'
+        elif area <= 90:
+            archetype = 'individual_group'
+        elif area >= 360 and roll < 0.64:
+            archetype = 'plateau_valley'
+        elif roll < 0.70:
+            archetype = 'range'
         else:
             archetype = 'mixed'
 
-        if archetype == 'massif':
+        if archetype == 'plateau_valley':
             ridge_count = int(2 + np.round(size_scale))
             valley_count = max(1, ridge_count - 1)
             peak_count = int(2 + np.round(2.2 * size_scale))
@@ -2325,6 +2818,12 @@ def _build_mountain_structure_delta(biomes, land_mask, seed):
             peak_count = int(1 + np.round(1.1 * size_scale))
             theta_jitter = 0.20
             peak_amp = 0.39
+        elif archetype == 'individual_group':
+            ridge_count = int(1 + np.round(1.0 * size_scale))
+            valley_count = int(1 + np.round(0.8 * size_scale))
+            peak_count = int(2 + np.round(2.6 * size_scale))
+            theta_jitter = 0.48
+            peak_amp = 0.62
         else:
             ridge_count = int(2 + np.round(1.8 * size_scale))
             valley_count = int(2 + np.round(1.4 * size_scale))
@@ -2399,8 +2898,68 @@ def _build_mountain_structure_delta(biomes, land_mask, seed):
             stair = ndimage.gaussian_filter(comp_mask.astype(np.float32), sigma=stair_sigma)
             component_field += 0.32 * stair
             component_field -= 0.21 * ndimage.gaussian_filter(stair, sigma=max(1.0, 0.8 * size_scale))
+        elif archetype == 'plateau_valley':
+            plateau_core = ndimage.gaussian_filter(comp_mask.astype(np.float32), sigma=2.0 + 0.7 * size_scale)
+            plateau_gate = _smoothstep(0.16, 0.64, plateau_core)
+            plateau_flat = ndimage.gaussian_filter(component_field, sigma=1.5 + 0.2 * size_scale)
+            component_field += (plateau_flat - component_field) * plateau_gate * 0.48
+
+            valley_phase = float(rng.uniform(0.0, 2.0 * np.pi))
+            valley_axis = np.cos(base_theta) * (xx - cx) + np.sin(base_theta) * (yy - cy)
+            valley_rhythm = np.sin(valley_axis / max(4.8, 3.2 + 2.0 * size_scale) + valley_phase)
+            valley_gate = np.power(np.clip(1.0 - np.abs(valley_rhythm), 0.0, 1.0), 2.2)
+            component_field -= valley_gate * plateau_gate * 0.26
+        elif archetype == 'individual_group':
+            group_count = int(np.clip(np.round(1.0 + size_scale), 1, 5))
+            for _ in range(group_count):
+                index = int(rng.integers(0, len(ys)))
+                gy = float(ys[index])
+                gx = float(xs[index])
+                satellites = int(1 + np.clip(np.round(size_scale * 1.2), 1, 5))
+                for sid in range(satellites):
+                    angle = float(rng.uniform(0.0, 2.0 * np.pi))
+                    radius = float((0.9 + 2.3 * rng.random()) * (0.6 + 0.5 * sid))
+                    py = gy + np.sin(angle) * radius
+                    px = gx + np.cos(angle) * radius
+                    peak_r = float(0.9 + 1.4 * rng.random())
+                    asym = 0.84 + 0.28 * float(rng.random())
+                    dist2 = ((yy - py) ** 2 + ((xx - px) * asym) ** 2)
+                    component_field += 0.17 * np.exp(-dist2 / (2.0 * peak_r ** 2))
         elif archetype == 'mixed':
             component_field += 0.14 * broad_noise
+
+        warp_x = ndimage.gaussian_filter(rng.normal(0.0, 1.0, size=(height, width)).astype(np.float32), sigma=2.2 + 0.35 * size_scale)
+        warp_y = ndimage.gaussian_filter(rng.normal(0.0, 1.0, size=(height, width)).astype(np.float32), sigma=2.0 + 0.32 * size_scale)
+        warp_x *= MOUNTAIN_DOMAIN_WARP_STRENGTH
+        warp_y *= MOUNTAIN_DOMAIN_WARP_STRENGTH
+        wx = xx + warp_x
+        wy = yy + warp_y
+
+        phase_a = float(rng.uniform(0.0, 2.0 * np.pi))
+        phase_b = float(rng.uniform(0.0, 2.0 * np.pi))
+        phase_c = float(rng.uniform(0.0, 2.0 * np.pi))
+        small_scale = max(2.4, 2.2 + 1.2 * size_scale)
+        mid_scale = max(5.5, 4.0 + 2.8 * size_scale)
+        large_scale = max(9.0, 7.5 + 5.0 * size_scale)
+
+        ridge_small_raw = np.sin((np.cos(base_theta) * wx + np.sin(base_theta) * wy) / small_scale + phase_a)
+        ridge_mid_raw = np.sin((np.cos(base_theta + 0.22) * wx + np.sin(base_theta + 0.22) * wy) / mid_scale + phase_b)
+        ridge_large_raw = np.sin((np.cos(base_theta - 0.18) * wx + np.sin(base_theta - 0.18) * wy) / large_scale + phase_c)
+
+        ridge_small = np.power(np.clip(1.0 - np.abs(ridge_small_raw), 0.0, 1.0), 2.0)
+        ridge_mid = np.power(np.clip(1.0 - np.abs(ridge_mid_raw), 0.0, 1.0), 1.8)
+        ridge_large = np.power(np.clip(1.0 - np.abs(ridge_large_raw), 0.0, 1.0), 1.5)
+        range_mix = ridge_large * 0.58 + ridge_mid * 0.30 + ridge_small * 0.12
+        component_field += range_mix * MOUNTAIN_RANGE_MIX_STRENGTH
+
+        if archetype == 'ghat':
+            escarp_axis = np.cos(base_theta) * (xx - cx) + np.sin(base_theta) * (yy - cy)
+            escarp_norm = np.clip(escarp_axis / max(2.0, 3.0 + 1.8 * size_scale), -1.0, 1.0)
+            windward = _smoothstep(-0.10, 0.55, escarp_norm)
+            leeward = 1.0 - windward
+            edge_core = ndimage.gaussian_filter(comp_mask.astype(np.float32), sigma=0.9 + 0.2 * size_scale)
+            component_field += edge_core * (windward * 0.34 + leeward * 0.12) * MOUNTAIN_GHAT_ESCARPMENT_STRENGTH
+            component_field -= edge_core * (windward * 0.24 + leeward * 0.08) * MOUNTAIN_VALLEY_MEANDER_STRENGTH
 
         mega_spine = np.zeros((height, width), dtype=np.float32)
         if area > 220:
@@ -2444,6 +3003,19 @@ def _build_mountain_structure_delta(biomes, land_mask, seed):
 
         component_field += mega_spine * (0.30 + 0.28 * rng.random())
         component_field += small_chain * (0.26 + 0.14 * rng.random())
+
+        if archetype in {'individual_group', 'mixed'}:
+            group_field = ndimage.gaussian_filter(np.clip(component_field, 0.0, None), sigma=0.85)
+            component_field += group_field * MOUNTAIN_INDIVIDUAL_GROUP_STRENGTH * 0.18
+            carve_seed = ndimage.gaussian_filter(np.abs(component_field), sigma=1.15)
+            component_field -= carve_seed * MOUNTAIN_INDIVIDUAL_GROUP_STRENGTH * 0.10
+
+        if archetype in {'plateau_valley', 'mixed'}:
+            plateau_field = ndimage.gaussian_filter(component_field, sigma=1.35 + 0.25 * size_scale)
+            plateau_gate = _smoothstep(0.20, 0.72, ndimage.gaussian_filter(comp_mask.astype(np.float32), sigma=1.8))
+            component_field += (plateau_field - component_field) * plateau_gate * (MOUNTAIN_PLATEAU_VALLEY_STRENGTH * 0.42)
+            valley_field = np.clip(1.0 - range_mix, 0.0, 1.0) * plateau_gate
+            component_field -= valley_field * (MOUNTAIN_PLATEAU_VALLEY_STRENGTH * 0.26)
 
         component_field = ndimage.gaussian_filter(component_field, sigma=0.30 + 0.10 * size_scale)
 
@@ -2490,7 +3062,7 @@ def _build_biome_structure_delta(biomes, land_mask, seed):
     mid = ndimage.gaussian_filter(rng.normal(0.0, 1.0, size=(height, width)).astype(np.float32), sigma=5.2)
     fine = ndimage.gaussian_filter(rng.normal(0.0, 1.0, size=(height, width)).astype(np.float32), sigma=2.0)
 
-    plains_mask = land_mask & np.isin(biomes, ['grassland', 'meadow', 'steppe', 'savanna', 'snow_plains'])
+    plains_mask = land_mask & np.isin(biomes, ['grassland', 'meadow', 'steppe', 'savanna', 'snow_plains', 'coast', 'beach'])
     forest_mask = land_mask & np.isin(biomes, ['temperate_forest', 'woodland', 'tropical_forest', 'rainforest', 'snow_forest'])
     desert_mask = land_mask & np.isin(biomes, ['sand_desert', 'rock_desert', 'badlands', 'oasis'])
     hills_mask = land_mask & np.isin(biomes, ['grassy_hills', 'forest_hills', 'rocky_hills', 'snow_hills'])
@@ -2570,6 +3142,7 @@ def _build_biome_structure_delta(biomes, land_mask, seed):
 
 
 def reshape_elevation_by_biome(elevation, biomes, land_mask, is_river, is_lake, seed,
+                               is_island=None,
                                strength=ELEVATION_RESHAPE_BASE_STRENGTH):
     """
     Reshape elevation to be biome-natural while preserving flow plausibility.
@@ -2588,8 +3161,16 @@ def reshape_elevation_by_biome(elevation, biomes, land_mask, is_river, is_lake, 
         return np.clip(reshaped, 0.0, 1.0)
 
     target_level, relief_scale = _build_biome_profile_maps(biomes, land_mask)
-    target_level = ndimage.gaussian_filter(target_level, sigma=ELEVATION_BIOME_TRANSITION_SIGMA)
-    relief_scale = ndimage.gaussian_filter(relief_scale, sigma=ELEVATION_BIOME_TRANSITION_SIGMA)
+    transition_weight = _biome_transition_weight(
+        biomes,
+        land_mask,
+        transition_width=ELEVATION_TRANSITION_SMOOTHSTEP_WIDTH,
+    )
+
+    target_level_soft = ndimage.gaussian_filter(target_level, sigma=ELEVATION_BIOME_TRANSITION_SIGMA * 1.25)
+    relief_scale_soft = ndimage.gaussian_filter(relief_scale, sigma=ELEVATION_BIOME_TRANSITION_SIGMA * 1.15)
+    target_level = target_level * (1.0 - transition_weight) + target_level_soft * transition_weight
+    relief_scale = relief_scale * (1.0 - transition_weight) + relief_scale_soft * transition_weight
 
     norm_land = _safe_normalize(reshaped, land_mask, low_pct=2, high_pct=98)
     bias = (target_level - norm_land)
@@ -2603,7 +3184,10 @@ def reshape_elevation_by_biome(elevation, biomes, land_mask, is_river, is_lake, 
     if is_lake.any():
         hydro_preserve[is_lake] = np.minimum(hydro_preserve[is_lake], 1.0 - ELEVATION_LAKE_PRESERVE)
 
+    slope_gate = _smoothstep(0.0, ELEVATION_SLOPE_LIMIT, ELEVATION_SLOPE_LIMIT - _slope_field(reshaped))
     shift = strength * bias * hydro_preserve
+    shift *= (0.50 + 0.50 * slope_gate)
+    shift *= (0.78 + 0.22 * transition_weight)
     shift[~land_mask] = 0.0
     reshaped = reshaped + shift
 
@@ -2630,7 +3214,29 @@ def reshape_elevation_by_biome(elevation, biomes, land_mask, is_river, is_lake, 
     if mountain_mask.any():
         summit_focus = np.clip((target_level - 0.72) / 0.22, 0.0, 1.0) * mountain_mask.astype(np.float32)
         summit_detail = reshaped - ndimage.gaussian_filter(reshaped, sigma=1.05)
-        reshaped += summit_detail * summit_focus * 0.28
+        reshaped += summit_detail * summit_focus * 0.20
+
+    preserve_mask = (is_river | is_lake).astype(bool)
+    if mountain_mask.any():
+        summit_preserve = mountain_mask & (target_level > 0.90)
+        preserve_mask |= summit_preserve
+
+    reshaped = _slope_aware_hydraulic_smooth(
+        reshaped,
+        land_mask=land_mask,
+        preserve_mask=preserve_mask,
+        passes=ELEVATION_HYDRAULIC_PASSES,
+        slope_limit=ELEVATION_SLOPE_LIMIT,
+        erosion_rate=ELEVATION_HYDRAULIC_EROSION_RATE,
+    )
+
+    if mountain_mask.any():
+        reshaped = _suppress_mountain_spikes(
+            reshaped,
+            mountain_mask,
+            strength=MOUNTAIN_SPIKE_SUPPRESS_STRENGTH,
+            prominence_threshold=MOUNTAIN_SPIKE_PROM_THRESH,
+        )
 
     # Smooth mountain edge transitions so mountain regions blend into adjacent biomes.
     if mountain_mask.any():
@@ -2645,6 +3251,34 @@ def reshape_elevation_by_biome(elevation, biomes, land_mask, is_river, is_lake, 
 
         edge_blur = ndimage.gaussian_filter(reshaped, sigma=1.05)
         reshaped = reshaped * (1.0 - edge_weight) + edge_blur * edge_weight
+
+    # Elevation continuity at biome borders via smoothstep-weighted local blending.
+    transition_blur = ndimage.gaussian_filter(reshaped, sigma=1.05)
+    transition_mix = np.clip(transition_weight * 0.30, 0.0, 0.30)
+    if mountain_mask.any():
+        transition_mix[mountain_mask] *= 0.62
+    transition_mix[~land_mask] = 0.0
+    reshaped = reshaped * (1.0 - transition_mix) + transition_blur * transition_mix
+
+    reshaped = _apply_coastal_micro_shaping(
+        reshaped,
+        base,
+        biomes,
+        land_mask,
+        is_river,
+        is_lake,
+        seed,
+    )
+
+    reshaped = _suppress_coastal_island_spikes(
+        reshaped,
+        base,
+        land_mask,
+        biomes,
+        is_river,
+        is_lake,
+        is_island=is_island,
+    )
 
     # Preserve hydrology-sensitive channels/lakes close to original elevations.
     reshaped[is_river] = (
@@ -8840,6 +9474,8 @@ def generate_world(seed):
     print(f"  - Island tiles: {island_count} ({island_count/ocean_count*100:.2f}% of ocean)")
     
     is_land_with_islands = is_land | is_island
+    dist_ocean = compute_distance_from_ocean(is_land_with_islands, width, height)
+    dist_coast = compute_distance_to_coast(is_land_with_islands, width, height)
 
     # Islands can occasionally block a previously ocean-reaching mouth.
     # Repair river connectivity against final land mask, then prune any
@@ -8972,6 +9608,7 @@ def generate_world(seed):
         summarize_elevation_stats("Elevation before reshape", baseline_elevation, land_mask)
         elevation = reshape_elevation_by_biome(
             baseline_elevation, biomes, land_mask, is_river, is_lake, seed,
+            is_island=is_island,
             strength=ELEVATION_RESHAPE_BASE_STRENGTH
         )
         summarize_elevation_stats("Elevation after reshape", elevation, land_mask)
@@ -8995,6 +9632,7 @@ def generate_world(seed):
 
             elevation = reshape_elevation_by_biome(
                 baseline_elevation, biomes, land_mask, is_river, is_lake, seed,
+                is_island=is_island,
                 strength=retry_strength
             )
             is_mountain = identify_mountains(elevation, is_land, convergent, MOUNTAIN_PERCENT_OF_LAND)
@@ -9030,7 +9668,8 @@ def generate_world(seed):
         dist_lake = compute_distance_from_lakes(is_lake, width, height)
         slope = compute_slope_map(elevation, width, height)
         roughness = compute_roughness_map(elevation, width, height)
-        dist_coast = compute_distance_to_coast(is_land, width, height)
+        dist_ocean = compute_distance_from_ocean(is_land_with_islands, width, height)
+        dist_coast = compute_distance_to_coast(is_land_with_islands, width, height)
         aspect, grad_x, grad_y = compute_slope_direction(elevation, width, height)
         climate_landforms = classify_landforms(elevation, slope, is_land, is_mountain)
         is_hills = climate_landforms == 'hills'
