@@ -190,10 +190,10 @@ COAST_SHAPE_STRENGTH = 0.12
 COAST_TRANSITION_SIGMA = 1.10
 COAST_PRESERVE_RATIO = 0.44
 COAST_MAX_LOCAL_DELTA = 0.055
-COAST_SPIKE_SUPPRESS_STRENGTH = 0.38
-COAST_SPIKE_PROM_THRESH = 0.045
-ISLAND_SPIKE_SUPPRESS_STRENGTH = 0.62
-ISLAND_EDGE_SMOOTH_SIGMA = 1.15
+COAST_SPIKE_SUPPRESS_STRENGTH = 0.42
+COAST_SPIKE_PROM_THRESH = 0.040
+ISLAND_SPIKE_SUPPRESS_STRENGTH = 0.72
+ISLAND_EDGE_SMOOTH_SIGMA = 1.25
 BEACH_SHORE_FLAT_BLEND = 0.56
 BEACH_SHORE_RAMP_BLEND = 0.32
 
@@ -2082,6 +2082,18 @@ def enforce_expanded_biome_presence(biomes, land_mask, landforms, temperature, m
                     )
                     biomes[organic_expand] = 'beach'
 
+    # Island shoreline safeguard: ensure island coastal rims can become beaches.
+    island_like = effective_land & (dist_ocean <= 3.2) & (dist_coast <= 2.2) & (~is_river)
+    if island_like.any():
+        island_shore = island_like & np.isin(
+            biomes,
+            ['coast', 'grassland', 'meadow', 'savanna', 'steppe', 'woodland', 'grassy_hills', 'forest_hills']
+        )
+        if island_shore.any():
+            island_rand = rng.random(biomes.shape)
+            island_pick = island_shore & (island_rand < 0.42)
+            biomes[island_pick] = 'beach'
+
     return biomes
 
 def smooth_expanded_biomes(biomes, land_mask, temperature, moisture, elevation,
@@ -2684,7 +2696,7 @@ def _suppress_coastal_island_spikes(elevation, base, land_mask, biomes, is_river
     if prom_vals.size == 0:
         return np.clip(out, 0.0, 1.0).astype(np.float32)
 
-    dyn_thr = float(np.percentile(prom_vals, 86))
+    dyn_thr = float(np.percentile(prom_vals, 82))
     threshold = max(float(COAST_SPIKE_PROM_THRESH), dyn_thr)
     spike = np.clip((prominence - threshold) / max(1e-6, threshold * 0.92), 0.0, 1.0)
     spike *= support
@@ -2701,7 +2713,7 @@ def _suppress_coastal_island_spikes(elevation, base, land_mask, biomes, is_river
 
     extra_smooth = ndimage.gaussian_filter(out, sigma=1.35)
     shoreline_focus = np.clip(support * 1.1, 0.0, 1.0)
-    out = out * (1.0 - shoreline_focus * 0.22) + extra_smooth * (shoreline_focus * 0.22)
+    out = out * (1.0 - shoreline_focus * 0.28) + extra_smooth * (shoreline_focus * 0.28)
 
     protected = is_river | is_lake
     out[protected] = elevation[protected]

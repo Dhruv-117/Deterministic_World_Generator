@@ -1,0 +1,7 @@
+numpy
+pandas
+scipy
+Pillow
+opencv-python
+noise
+matplotlib
