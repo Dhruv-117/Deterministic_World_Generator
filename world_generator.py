@@ -38,9 +38,9 @@ except ImportError:
 # =============================================================================
 # CONSTANTS
 # =============================================================================
-WORLD_WIDTH = 300
-WORLD_HEIGHT = 300
-TOTAL_TILES = WORLD_WIDTH * WORLD_HEIGHT  # 40,000
+WORLD_WIDTH = 316
+WORLD_HEIGHT = 316
+TOTAL_TILES = WORLD_WIDTH * WORLD_HEIGHT  # 99,000
 
 REGION_SIZE = 8  # 8x8 tile regions
 REGIONS_X = WORLD_WIDTH // REGION_SIZE   # 25
@@ -156,9 +156,9 @@ ENABLE_BIOME_ELEVATION_RESHAPING = True
 ENABLE_RIVER_RESHAPE_FALLBACK = True
 
 # Reshape intensity (0-1): higher = stronger biome elevation influence
-ELEVATION_RESHAPE_BASE_STRENGTH = 0.42
-ELEVATION_RESHAPE_RETRY_FACTOR = 0.55
-ELEVATION_RESHAPE_MAX_DELTA = 0.27
+ELEVATION_RESHAPE_BASE_STRENGTH = 0.54
+ELEVATION_RESHAPE_RETRY_FACTOR = 0.60
+ELEVATION_RESHAPE_MAX_DELTA = 0.34
 
 # Smooth transitions and local relief controls
 ELEVATION_BIOME_TRANSITION_SIGMA = 1.35
@@ -169,12 +169,12 @@ ELEVATION_FINAL_SMOOTH_BLEND = 0.05
 ELEVATION_SLOPE_LIMIT = 0.18
 ELEVATION_HYDRAULIC_PASSES = 2
 ELEVATION_HYDRAULIC_EROSION_RATE = 0.16
-MOUNTAIN_RANGE_CARVE_STRENGTH = 0.56
+MOUNTAIN_RANGE_CARVE_STRENGTH = 0.72
 BIOME_STRUCTURE_CARVE_STRENGTH = 0.15
-MOUNTAIN_FOOTHILL_RADIUS = 10.0
+MOUNTAIN_FOOTHILL_RADIUS = 13.0
 MOUNTAIN_COMPONENT_MIN_TILES = 8
-MOUNTAIN_EDGE_TRANSITION_WIDTH = 3.8
-MOUNTAIN_EDGE_TRANSITION_BLEND = 0.52
+MOUNTAIN_EDGE_TRANSITION_WIDTH = 6.5
+MOUNTAIN_EDGE_TRANSITION_BLEND = 0.68
 MOUNTAIN_MEGA_SYSTEM_THRESHOLD = 420
 MOUNTAIN_BRANCH_CHAIN_STRENGTH = 0.32
 MOUNTAIN_VALLEY_MEANDER_STRENGTH = 0.38
@@ -184,22 +184,35 @@ MOUNTAIN_RANGE_MIX_STRENGTH = 0.36
 MOUNTAIN_INDIVIDUAL_GROUP_STRENGTH = 0.30
 MOUNTAIN_PLATEAU_VALLEY_STRENGTH = 0.32
 MOUNTAIN_DOMAIN_WARP_STRENGTH = 3.2
-MOUNTAIN_SPIKE_SUPPRESS_STRENGTH = 0.34
-MOUNTAIN_SPIKE_PROM_THRESH = 0.10
+MOUNTAIN_SPIKE_SUPPRESS_STRENGTH = 0.20
+MOUNTAIN_SPIKE_PROM_THRESH = 0.14
 COAST_SHAPE_STRENGTH = 0.12
 COAST_TRANSITION_SIGMA = 1.10
 COAST_PRESERVE_RATIO = 0.44
 COAST_MAX_LOCAL_DELTA = 0.055
-COAST_SPIKE_SUPPRESS_STRENGTH = 0.42
-COAST_SPIKE_PROM_THRESH = 0.040
-ISLAND_SPIKE_SUPPRESS_STRENGTH = 0.72
-ISLAND_EDGE_SMOOTH_SIGMA = 1.25
+COAST_SPIKE_SUPPRESS_STRENGTH = 0.58
+COAST_SPIKE_PROM_THRESH = 0.030
+ISLAND_SPIKE_SUPPRESS_STRENGTH = 0.88
+ISLAND_EDGE_SMOOTH_SIGMA = 1.65
 BEACH_SHORE_FLAT_BLEND = 0.56
 BEACH_SHORE_RAMP_BLEND = 0.32
 
 # Hydrology protection while reshaping
 ELEVATION_RIVER_CHANNEL_PRESERVE = 0.72
 ELEVATION_LAKE_PRESERVE = 0.82
+
+# Post-hydrology terrain shaping around inland water
+ENABLE_WATER_BANK_SHAPING = True
+WATER_BANK_SHAPE_STRENGTH = 0.68        # was 0.52 — stronger pull toward water
+WATER_BANK_RIVER_RADIUS = 7.0           # was 5.0 — wider river valley influence
+WATER_BANK_LAKE_RADIUS = 11.0           # was 8.5 — wider lake bowl influence
+WATER_BANK_RIVER_RISE = 0.10            # was 0.07 — steeper valley walls
+WATER_BANK_LAKE_RISE = 0.15             # was 0.11 — steeper lake banks
+WATER_BANK_POSITIVE_BLEND = 0.25        # was 0.35 — less raising, more lowering
+WATER_BANK_SMOOTH_SIGMA = 1.20          # was 1.05
+WATER_BANK_SMOOTH_BLEND = 0.35          # was 0.30
+WATER_BANK_MAX_LOWERING = 0.14          # was 0.09 — allow deeper valley carving
+WATER_BANK_MAX_RAISING = 0.04           # was 0.05 — less terrain raising
 
 # Final land remap for smoother grayscale range
 ELEVATION_LAND_OUT_MIN = 0.04
@@ -212,23 +225,24 @@ RIVER_TOLERANCE_OCEAN_REACH = 0.45      # ±45%
 RIVER_TOLERANCE_NUM_SYSTEMS = 0.45      # ±45%
 
 # Per-biome elevation intent: level(0..1 on land) and relief multiplier
+# Mountains are pushed higher and given more relief for realistic peak height.
 BIOME_ELEVATION_PROFILES = {
-    'rocky_mountains': {'level': 0.91, 'relief': 1.12},
-    'snow_mountains': {'level': 0.95, 'relief': 1.10},
-    'forest_mountains': {'level': 0.84, 'relief': 1.00},
-    'alpine_meadows': {'level': 0.80, 'relief': 0.88},
-    'glacier': {'level': 0.96, 'relief': 0.78},
-    'grassy_hills': {'level': 0.62, 'relief': 0.92},
-    'forest_hills': {'level': 0.65, 'relief': 0.88},
-    'rocky_hills': {'level': 0.70, 'relief': 1.04},
-    'snow_hills': {'level': 0.74, 'relief': 0.96},
+    'rocky_mountains': {'level': 0.96, 'relief': 1.30},
+    'snow_mountains':  {'level': 0.98, 'relief': 1.28},
+    'forest_mountains':{'level': 0.89, 'relief': 1.14},
+    'alpine_meadows':  {'level': 0.85, 'relief': 1.00},
+    'glacier':         {'level': 0.99, 'relief': 0.90},
+    'grassy_hills':    {'level': 0.62, 'relief': 0.92},
+    'forest_hills':    {'level': 0.65, 'relief': 0.88},
+    'rocky_hills':     {'level': 0.72, 'relief': 1.08},
+    'snow_hills':      {'level': 0.76, 'relief': 1.00},
     'grassland': {'level': 0.48, 'relief': 0.68},
     'meadow': {'level': 0.44, 'relief': 0.60},
     'steppe': {'level': 0.50, 'relief': 0.78},
     'savanna': {'level': 0.47, 'relief': 0.74},
+    'coast': {'level': 0.41, 'relief': 0.56},
+    'beach': {'level': 0.37, 'relief': 0.44},
     'temperate_forest': {'level': 0.56, 'relief': 0.80},
-        'coast': {'level': 0.41, 'relief': 0.56},
-        'beach': {'level': 0.37, 'relief': 0.44},
     'woodland': {'level': 0.54, 'relief': 0.76},
     'tropical_forest': {'level': 0.52, 'relief': 0.74},
     'rainforest': {'level': 0.50, 'relief': 0.70},
@@ -551,18 +565,90 @@ class SeededNoiseGenerator:
         h = ((h ^ (h >> 13)) * 1274126177) & 0xFFFFFFFF
         return ((h & 0xFFFFFF) / 0xFFFFFF) * 2 - 1
 
+    # ------------------------------------------------------------------
+    # Vectorised grid variants – accept 2-D float32 arrays of x/y coords
+    # and return a same-shaped float32 array.  Use the noise library when
+    # available (row-by-row via list-comprehension which is still ~10–50×
+    # faster than the old pixel-by-pixel Python loop), otherwise fall back
+    # to a fully-NumPy FBM implementation.
+    # ------------------------------------------------------------------
+    def _fbm_grid(self, xx, yy, scale, octaves, persistence):
+        """NumPy FBM used when the noise library is absent."""
+        value     = np.zeros_like(xx, dtype=np.float32)
+        amplitude = 1.0
+        max_val   = 0.0
+        frequency = 1.0 / scale
+        ox, oy = float(self.offset_x), float(self.offset_y)
+        for _ in range(octaves):
+            nx = (xx + ox) * frequency
+            ny = (yy + oy) * frequency
+            # integer lattice
+            x0 = np.floor(nx).astype(np.int64); x1 = x0 + 1
+            y0 = np.floor(ny).astype(np.int64); y1 = y0 + 1
+            tx = (nx - x0).astype(np.float32)
+            ty = (ny - y0).astype(np.float32)
+            # quintic fade
+            sx = tx * tx * tx * (tx * (tx * 6.0 - 15.0) + 10.0)
+            sy = ty * ty * ty * (ty * (ty * 6.0 - 15.0) + 10.0)
+            # hashed lattice values (vectorised int arithmetic)
+            S = np.int64(self.seed)
+            def hv(xi, yi):
+                h = ((xi * np.int64(374761393) + yi * np.int64(668265263) + S)
+                     & np.int64(0xFFFFFFFF))
+                h = ((h ^ (h >> np.int64(13))) * np.int64(1274126177)) & np.int64(0xFFFFFFFF)
+                return ((h & np.int64(0xFFFFFF)).astype(np.float32) / 0xFFFFFF) * 2.0 - 1.0
+            v00 = hv(x0, y0); v10 = hv(x1, y0)
+            v01 = hv(x0, y1); v11 = hv(x1, y1)
+            ix0 = v00 + sx * (v10 - v00)
+            ix1 = v01 + sx * (v11 - v01)
+            value    += (ix0 + sy * (ix1 - ix0)) * amplitude
+            max_val  += amplitude
+            amplitude *= persistence
+            frequency *= 2.0
+        return value / max(max_val, 1e-9)
+
+    def perlin_like_grid(self, xx, yy, scale=1.0, octaves=4, persistence=0.5):
+        """Vectorised perlin-like noise over a 2-D grid."""
+        if NOISE_AVAILABLE:
+            h, w = xx.shape
+            ox, oy = self.offset_x, self.offset_y
+            base = self.seed % 1024
+            result = np.array(
+                [[pnoise2((xx[r, c] + ox) / scale, (yy[r, c] + oy) / scale,
+                          octaves=octaves, persistence=persistence,
+                          lacunarity=2.0, repeatx=WORLD_WIDTH, repeaty=WORLD_HEIGHT,
+                          base=base)
+                  for c in range(w)]
+                 for r in range(h)],
+                dtype=np.float32,
+            )
+            return result
+        return self._fbm_grid(xx, yy, scale, octaves, persistence)
+
+    def simplex_like_grid(self, xx, yy, scale=1.0, octaves=4, persistence=0.5):
+        """Vectorised simplex-like noise over a 2-D grid."""
+        if NOISE_AVAILABLE:
+            h, w = xx.shape
+            ox, oy = self.offset_x, self.offset_y
+            base = self.seed % 1024
+            result = np.array(
+                [[snoise2((xx[r, c] + ox) / scale, (yy[r, c] + oy) / scale,
+                          octaves=octaves, persistence=persistence,
+                          lacunarity=2.0, base=base)
+                  for c in range(w)]
+                 for r in range(h)],
+                dtype=np.float32,
+            )
+            return result
+        return self._fbm_grid(xx, yy, scale, octaves, persistence)
+
 
 def generate_heightmap_noise(width, height, noise_gen, scale=50.0, octaves=6):
-    """Generate a full heightmap using noise."""
-    heightmap = np.zeros((height, width))
-    
-    for y in range(height):
-        for x in range(width):
-            value = noise_gen.simplex_like(x, y, scale, octaves, 0.5)
-            value += 0.3 * noise_gen.perlin_like(x, y, scale * 0.5, octaves=3, persistence=0.6)
-            heightmap[y, x] = value
-    
-    return heightmap
+    """Generate a full heightmap using noise (vectorised)."""
+    yy, xx = np.indices((height, width), dtype=np.float32)
+    simplex = noise_gen.simplex_like_grid(xx, yy, scale=scale, octaves=octaves, persistence=0.5)
+    perlin  = noise_gen.perlin_like_grid(xx, yy, scale=scale * 0.5, octaves=3, persistence=0.6)
+    return (simplex + 0.3 * perlin).astype(np.float32)
 
 
 # =============================================================================
@@ -572,41 +658,39 @@ def generate_tectonic_plates(width, height, seed):
     """Generate 2-4 tectonic plates using noise-distorted Voronoi tessellation."""
     rng = np.random.default_rng(seed)
     py_random = random.Random(seed)
-    
+
     num_plates = rng.integers(2, 5)
     dominant_continent = py_random.random() < 0.70
-    
+
     plate_centers = []
     for i in range(num_plates):
         cx = rng.uniform(width * 0.1, width * 0.9)
         cy = rng.uniform(height * 0.1, height * 0.9)
         plate_centers.append([cx, cy])
-    
+
     plate_centers = np.array(plate_centers)
     noise_gen = SeededNoiseGenerator(seed + 500)
-    
-    plate_map = np.zeros((height, width), dtype=np.int32)
-    
-    for y in range(height):
-        for x in range(width):
-            min_dist = float('inf')
-            closest_plate = 0
-            
-            noise_val = noise_gen.simplex_like(x, y, scale=30.0, octaves=4, persistence=0.5)
-            noise_val2 = noise_gen.perlin_like(x, y, scale=15.0, octaves=3, persistence=0.6)
-            combined_noise = noise_val * 0.6 + noise_val2 * 0.4
-            
-            for i, (cx, cy) in enumerate(plate_centers):
-                base_dist = math.sqrt((x - cx) ** 2 + (y - cy) ** 2)
-                plate_noise = noise_gen.simplex_like(x + i * 1000, y + i * 1000, scale=40.0, octaves=3, persistence=0.5)
-                distortion = (combined_noise * 20 + plate_noise * 15)
-                dist = base_dist + distortion
-                
-                if dist < min_dist:
-                    min_dist = dist
-                    closest_plate = i
-            plate_map[y, x] = closest_plate
-    
+
+    # Build noise grids once (vectorised) instead of per-pixel Python calls.
+    yy, xx = np.indices((height, width), dtype=np.float32)
+    noise_v1 = noise_gen.simplex_like_grid(xx, yy, scale=30.0, octaves=4, persistence=0.5)
+    noise_v2 = noise_gen.perlin_like_grid(xx, yy, scale=15.0, octaves=3, persistence=0.6)
+    combined_noise = (noise_v1 * 0.6 + noise_v2 * 0.4).astype(np.float32)
+
+    # Distance to each plate centre with noise distortion (vectorised per plate).
+    dist_all = np.full((num_plates, height, width), np.inf, dtype=np.float32)
+    for i, (cx, cy) in enumerate(plate_centers):
+        base_dist = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2)
+        # Per-plate noise uses the same grid offset trick
+        plate_ng = SeededNoiseGenerator(seed + 500 + i * 1000)
+        p_noise = plate_ng.simplex_like_grid(
+            xx + i * 1000, yy + i * 1000, scale=40.0, octaves=3, persistence=0.5
+        )
+        distortion = combined_noise * 20.0 + p_noise * 15.0
+        dist_all[i] = base_dist + distortion
+
+    plate_map = np.argmin(dist_all, axis=0).astype(np.int32)
+
     plate_types = []
     if dominant_continent:
         plate_sizes = [(plate_map == i).sum() for i in range(num_plates)]
@@ -624,60 +708,63 @@ def generate_tectonic_plates(width, height, seed):
                 plate_types.append('continental')
             else:
                 plate_types.append('oceanic')
-    
+
     plate_vectors = []
     for i in range(num_plates):
         angle = rng.uniform(0, 2 * np.pi)
         speed = rng.uniform(0.5, 2.0)
         plate_vectors.append((np.cos(angle) * speed, np.sin(angle) * speed))
-    
+
     return plate_map, plate_centers, plate_types, plate_vectors, num_plates
 
 
 def find_plate_boundaries(plate_map, width, height):
-    """Find tiles that are on plate boundaries."""
+    """Find tiles that are on plate boundaries (vectorised)."""
     boundaries = np.zeros((height, width), dtype=bool)
-    
-    for y in range(height):
-        for x in range(width):
-            current_plate = plate_map[y, x]
-            for dy, dx in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-                ny, nx = y + dy, x + dx
-                if 0 <= ny < height and 0 <= nx < width:
-                    if plate_map[ny, nx] != current_plate:
-                        boundaries[y, x] = True
-                        break
-    
+    for dy, dx in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+        shifted = np.roll(plate_map, shift=(dy, dx), axis=(0, 1))
+        # Zero out wrap-around edges
+        if dy > 0:   shifted[:dy, :] = plate_map[:dy, :]
+        elif dy < 0: shifted[dy:, :] = plate_map[dy:, :]
+        if dx > 0:   shifted[:, :dx] = plate_map[:, :dx]
+        elif dx < 0: shifted[:, dx:] = plate_map[:, dx:]
+        boundaries |= (plate_map != shifted)
     return boundaries
 
 
 def determine_boundary_type(plate_map, plate_vectors, width, height):
-    """Determine if boundaries are convergent, divergent, or transform."""
+    """Determine if boundaries are convergent, divergent, or transform (vectorised)."""
     boundaries = find_plate_boundaries(plate_map, width, height)
     convergent = np.zeros((height, width), dtype=bool)
-    
-    for y in range(height):
-        for x in range(width):
-            if not boundaries[y, x]:
-                continue
-            
-            current_plate = plate_map[y, x]
-            v1 = plate_vectors[current_plate]
-            
-            for dy, dx in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-                ny, nx = y + dy, x + dx
-                if 0 <= ny < height and 0 <= nx < width:
-                    other_plate = plate_map[ny, nx]
-                    if other_plate != current_plate:
-                        v2 = plate_vectors[other_plate]
-                        rel_x = v1[0] - v2[0]
-                        rel_y = v1[1] - v2[1]
-                        dir_x = nx - x
-                        dir_y = ny - y
-                        if (rel_x * dir_x + rel_y * dir_y) > 0:
-                            convergent[y, x] = True
-                        break
-    
+
+    # For each cardinal direction, check relative velocity component
+    for dy, dx in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+        shifted_plate = np.roll(plate_map, shift=(dy, dx), axis=(0, 1))
+        # Fix wrap edges
+        if dy > 0:   shifted_plate[:dy, :]  = plate_map[:dy, :]
+        elif dy < 0: shifted_plate[dy:, :]  = plate_map[dy:, :]
+        if dx > 0:   shifted_plate[:, :dx]  = plate_map[:, :dx]
+        elif dx < 0: shifted_plate[:, dx:]  = plate_map[:, dx:]
+
+        cross_boundary = boundaries & (plate_map != shifted_plate)
+        if not cross_boundary.any():
+            continue
+
+        # Vectorised dot product: for each boundary tile, look up both plate vectors
+        v1x = np.array([plate_vectors[p][0] for p in plate_map.ravel()],
+                        dtype=np.float32).reshape(height, width)
+        v1y = np.array([plate_vectors[p][1] for p in plate_map.ravel()],
+                        dtype=np.float32).reshape(height, width)
+        v2x = np.array([plate_vectors[p][0] for p in shifted_plate.ravel()],
+                        dtype=np.float32).reshape(height, width)
+        v2y = np.array([plate_vectors[p][1] for p in shifted_plate.ravel()],
+                        dtype=np.float32).reshape(height, width)
+
+        rel_x = v1x - v2x
+        rel_y = v1y - v2y
+        dot   = rel_x * dx + rel_y * dy   # direction vector is (dx, dy)
+        convergent |= cross_boundary & (dot > 0)
+
     return boundaries, convergent
 
 
@@ -710,11 +797,11 @@ def generate_elevation(width, height, seed, plate_map, convergent_boundaries, pl
     # Meso: tectonic chains and warped ridge systems (small/medium/large mixed frequencies).
     yy, xx = np.indices((height, width), dtype=np.float32)
     warp_x = ndimage.gaussian_filter(
-        np.array([[noise_gen.perlin_like(x, y, scale=34.0, octaves=2, persistence=0.6) for x in range(width)] for y in range(height)], dtype=np.float32),
+        noise_gen.perlin_like_grid(xx, yy, scale=34.0, octaves=2, persistence=0.6),
         sigma=1.2,
     )
     warp_y = ndimage.gaussian_filter(
-        np.array([[noise_gen.simplex_like(x + 317, y + 911, scale=31.0, octaves=2, persistence=0.6) for x in range(width)] for y in range(height)], dtype=np.float32),
+        noise_gen.simplex_like_grid(xx + 317, yy + 911, scale=31.0, octaves=2, persistence=0.6),
         sigma=1.2,
     )
     wx = xx + warp_x * 4.0
@@ -726,14 +813,13 @@ def generate_elevation(width, height, seed, plate_map, convergent_boundaries, pl
     ridge_mix = ridge_large * 0.56 + ridge_mid * 0.30 + ridge_small * 0.14
     ridge_mix = ndimage.gaussian_filter(ridge_mix.astype(np.float32), sigma=0.9)
 
-    # Micro: small relief/erosion detail to avoid flat shelves.
-    micro_noise = np.zeros((height, width), dtype=np.float32)
-    for y in range(height):
-        for x in range(width):
-            micro_noise[y, x] = (
-                0.60 * noise_gen.simplex_like(x, y, scale=14.0, octaves=3, persistence=0.55)
-                + 0.40 * noise_gen.perlin_like(x, y, scale=9.0, octaves=2, persistence=0.60)
-            )
+    # Micro: small relief/erosion detail to avoid flat shelves (vectorised).
+    yy_f = yy.astype(np.float32)
+    xx_f = xx.astype(np.float32)
+    micro_noise = (
+        0.60 * noise_gen.simplex_like_grid(xx_f, yy_f, scale=14.0, octaves=3, persistence=0.55)
+        + 0.40 * noise_gen.perlin_like_grid(xx_f, yy_f, scale=9.0,  octaves=2, persistence=0.60)
+    ).astype(np.float32)
     micro_noise = (micro_noise - micro_noise.min()) / max(1e-6, (micro_noise.max() - micro_noise.min()))
 
     # Compose layered terrain: macro continent + meso mountain systems + micro details.
@@ -2676,7 +2762,13 @@ def _apply_coastal_micro_shaping(reshaped, base, biomes, land_mask, is_river, is
 
 
 def _suppress_coastal_island_spikes(elevation, base, land_mask, biomes, is_river, is_lake, is_island=None):
-    """Suppress abrupt elevation needles on coastal edges and islands."""
+    """
+    Suppress abrupt elevation needles on coastal edges and islands.
+
+    Also enforces that island interiors are higher than their perimeters
+    (natural dome shape), fixing the inverted-spike problem where the
+    island edge is higher than its center.
+    """
     out = elevation.astype(np.float32).copy()
     if not land_mask.any():
         return np.clip(out, 0.0, 1.0).astype(np.float32)
@@ -2714,6 +2806,36 @@ def _suppress_coastal_island_spikes(elevation, base, land_mask, biomes, is_river
     extra_smooth = ndimage.gaussian_filter(out, sigma=1.35)
     shoreline_focus = np.clip(support * 1.1, 0.0, 1.0)
     out = out * (1.0 - shoreline_focus * 0.28) + extra_smooth * (shoreline_focus * 0.28)
+
+    # ── Island dome enforcement ───────────────────────────────────────────────
+    # For each connected island component, if the perimeter mean elevation exceeds
+    # the interior mean, apply a radial dome correction that raises the interior
+    # and slightly lowers the perimeter edge.
+    if is_island is not None and island_mask.any():
+        all_land_including_islands = land_mask | island_mask
+        labeled, n = ndimage.label(island_mask)
+        for lid in range(1, n + 1):
+            comp = labeled == lid
+            if comp.sum() < 8:
+                continue
+            perim = comp & ndimage.binary_dilation(~all_land_including_islands)
+            interior = comp & ~perim
+            if perim.sum() < 2 or interior.sum() < 2:
+                continue
+            pe = float(out[perim].mean())
+            ie = float(out[interior].mean())
+            if ie >= pe - 0.005:
+                continue  # already dome-shaped
+            # Distance from perimeter within island: 0 at edge, 1 at center
+            dist_from_edge = ndimage.distance_transform_edt(~perim).astype(np.float32)
+            max_dist = float(dist_from_edge[comp].max()) if comp.any() else 1.0
+            if max_dist < 0.5:
+                continue
+            radial = np.clip(dist_from_edge / max_dist, 0.0, 1.0)  # 0=edge, 1=center
+            correction = (pe - ie) * radial * 0.65  # raise interior proportionally
+            out[comp] = np.clip(out[comp] + correction[comp], 0.0, 1.0)
+            # Slightly suppress the perimeter spike that caused the inversion
+            out[perim] = np.clip(out[perim] - (pe - ie) * 0.25, 0.0, 1.0)
 
     protected = is_river | is_lake
     out[protected] = elevation[protected]
@@ -2940,6 +3062,7 @@ def _build_mountain_structure_delta(biomes, land_mask, seed):
         elif archetype == 'mixed':
             component_field += 0.14 * broad_noise
 
+        # Multi-scale connected range synthesis (small/medium/large/mixed) with domain warping.
         warp_x = ndimage.gaussian_filter(rng.normal(0.0, 1.0, size=(height, width)).astype(np.float32), sigma=2.2 + 0.35 * size_scale)
         warp_y = ndimage.gaussian_filter(rng.normal(0.0, 1.0, size=(height, width)).astype(np.float32), sigma=2.0 + 0.32 * size_scale)
         warp_x *= MOUNTAIN_DOMAIN_WARP_STRENGTH
@@ -2964,6 +3087,7 @@ def _build_mountain_structure_delta(biomes, land_mask, seed):
         range_mix = ridge_large * 0.58 + ridge_mid * 0.30 + ridge_small * 0.12
         component_field += range_mix * MOUNTAIN_RANGE_MIX_STRENGTH
 
+        # Ghat asymmetry: one steep escarpment face + one gradual lee side.
         if archetype == 'ghat':
             escarp_axis = np.cos(base_theta) * (xx - cx) + np.sin(base_theta) * (yy - cy)
             escarp_norm = np.clip(escarp_axis / max(2.0, 3.0 + 1.8 * size_scale), -1.0, 1.0)
@@ -3016,12 +3140,14 @@ def _build_mountain_structure_delta(biomes, land_mask, seed):
         component_field += mega_spine * (0.30 + 0.28 * rng.random())
         component_field += small_chain * (0.26 + 0.14 * rng.random())
 
+        # Extra isolated/group uplift and local carve corridors for natural peak grouping.
         if archetype in {'individual_group', 'mixed'}:
             group_field = ndimage.gaussian_filter(np.clip(component_field, 0.0, None), sigma=0.85)
             component_field += group_field * MOUNTAIN_INDIVIDUAL_GROUP_STRENGTH * 0.18
             carve_seed = ndimage.gaussian_filter(np.abs(component_field), sigma=1.15)
             component_field -= carve_seed * MOUNTAIN_INDIVIDUAL_GROUP_STRENGTH * 0.10
 
+        # Plateau + valley coexistence for high mountain tablelands.
         if archetype in {'plateau_valley', 'mixed'}:
             plateau_field = ndimage.gaussian_filter(component_field, sigma=1.35 + 0.25 * size_scale)
             plateau_gate = _smoothstep(0.20, 0.72, ndimage.gaussian_filter(comp_mask.astype(np.float32), sigma=1.8))
@@ -3151,6 +3277,76 @@ def _build_biome_structure_delta(biomes, land_mask, seed):
 
     delta[~land_mask] = 0.0
     return np.clip(delta, -1.0, 1.0).astype(np.float32)
+
+
+def _universal_coast_taper(elevation, land_mask, biomes, is_river, is_lake):
+    """
+    Force ALL land tiles near the ocean to taper toward sea level, regardless
+    of biome. This eliminates vertical cliff walls where mountains/glaciers/forests
+    sit directly on the ocean boundary.
+
+    The taper uses a distance-from-ocean field and applies a smoothstep-based
+    elevation ceiling that rises steeply from the water's edge inland.
+
+    Naturally low coastal biomes (coast, beach, mangrove, swamp, marsh) are
+    mostly exempt since they're already at appropriate elevations.
+
+    Mountains/glaciers AT the coast are tapered to look like sea cliffs — they
+    slope down steeply to the water but still have visible height, they just
+    don't appear as infinitely tall vertical walls next to a flat ocean plane.
+    """
+    out = elevation.astype(np.float32).copy()
+    if not land_mask.any():
+        return out
+
+    # Distance from ocean = distance transform of land mask
+    # (0 = at ocean boundary, increases inland)
+    dist_from_ocean = ndimage.distance_transform_edt(land_mask).astype(np.float32)
+    # dist_from_ocean == 1 means directly adjacent to ocean
+
+    # Exempt biomes — already naturally low, don't taper them
+    EXEMPT_BIOMES = {'coast', 'beach', 'mangrove', 'swamp', 'marsh', 'oasis', 'river', 'ocean'}
+    is_exempt = np.vectorize(lambda b: b in EXEMPT_BIOMES)(biomes)
+
+    # Coastal zone: tiles within 5 tiles of ocean
+    coastal_zone = land_mask & (dist_from_ocean <= 5.0) & ~is_exempt & ~is_river & ~is_lake
+
+    if not coastal_zone.any():
+        return out
+
+    # Elevation ceiling as a function of distance from ocean:
+    # dist=1 → max 0.28  (can have modest cliff, but not mountain wall)
+    # dist=2 → max 0.42
+    # dist=3 → max 0.56
+    # dist=4 → max 0.68
+    # dist=5 → max 0.80  (almost no constraint at 5 tiles)
+    # Smoothstep ramp so the transition is gradual
+    t = np.clip((dist_from_ocean - 1.0) / 4.0, 0.0, 1.0)  # 0 at dist=1, 1 at dist=5
+    t_smooth = t * t * (3.0 - 2.0 * t)                     # smoothstep
+    elev_ceiling = 0.28 + t_smooth * 0.52                   # 0.28 → 0.80
+
+    # Only apply where current elevation EXCEEDS the ceiling
+    needs_taper = coastal_zone & (out > elev_ceiling)
+    if not needs_taper.any():
+        return out
+
+    # Blend between current and ceiling — not a hard clamp but a strong pull
+    # Use a blend factor that's stronger the more excessive the elevation
+    excess = np.clip(out - elev_ceiling, 0.0, None)
+    # Pull strength: mild excess → gentle pull, large excess → hard clamp
+    pull = np.clip(excess / 0.30, 0.0, 1.0)               # full pull if 0.30+ over ceiling
+    pull_strength = 0.55 + 0.40 * pull                     # 0.55–0.95
+
+    new_elev = out * (1.0 - pull_strength) + elev_ceiling * pull_strength
+    out = np.where(needs_taper, new_elev, out)
+
+    # Second smoothing pass: blur the taper zone so transitions are gradual
+    smooth = ndimage.gaussian_filter(out, sigma=1.2)
+    taper_blend = np.clip((5.0 - dist_from_ocean) / 5.0, 0.0, 1.0) * 0.30
+    taper_blend[~coastal_zone] = 0.0
+    out = out * (1.0 - taper_blend) + smooth * taper_blend
+
+    return np.clip(out, 0.0, 1.0).astype(np.float32)
 
 
 def reshape_elevation_by_biome(elevation, biomes, land_mask, is_river, is_lake, seed,
@@ -3292,6 +3488,21 @@ def reshape_elevation_by_biome(elevation, biomes, land_mask, is_river, is_lake, 
         is_island=is_island,
     )
 
+    # ── Universal coastal elevation taper ─────────────────────────────────────
+    # Problem: mountains, glaciers, forests etc. can sit directly on the ocean
+    # boundary with full elevation (0.5–0.98), creating vertical cliff walls.
+    # The existing coast/beach shaping only covers coast/beach biomes.
+    # This pass forces ALL land tiles near the ocean to taper toward sea level,
+    # regardless of biome. The taper is:
+    #   • Hard within 1 tile of ocean:  elev clamped to ≤ 0.25
+    #   • Within 2 tiles:               elev clamped to ≤ 0.38
+    #   • Within 3 tiles:               elev clamped to ≤ 0.52
+    #   • Within 4 tiles:               elev clamped to ≤ 0.65
+    # Biomes naturally at the coast (coast, beach, mangrove, swamp) are exempt
+    # from the hard clamp since they're already low. Mountain/glacier at coast
+    # get a smooth ramp so they look like sea cliffs not floating walls.
+    reshaped = _universal_coast_taper(reshaped, land_mask, biomes, is_river, is_lake)
+
     # Preserve hydrology-sensitive channels/lakes close to original elevations.
     reshaped[is_river] = (
         ELEVATION_RIVER_CHANNEL_PRESERVE * base[is_river]
@@ -3326,6 +3537,205 @@ def reshape_elevation_by_biome(elevation, biomes, land_mask, is_river, is_lake, 
     reshaped[land_mask] = ELEVATION_LAND_OUT_MIN + normalized * (ELEVATION_LAND_OUT_MAX - ELEVATION_LAND_OUT_MIN)
 
     return np.clip(reshaped, 0.0, 1.0)
+
+
+def shape_terrain_around_inland_water(elevation, land_mask, is_river, is_lake, seed=0):
+    """
+    Create natural terrain shaping around rivers and lakes.
+
+    RIVER BANKS — 6 morphological types, assigned per-tile stochastically:
+      Type 0 (35%): V-valley slope  — terrain falls smoothly into the channel
+      Type 1 (18%): Floodplain      — gentle concave bench beside the river
+      Type 2 (14%): Levee/ridge     — slight rise right at the bank then drop
+      Type 3 (12%): Stepped terrace — two-step descending terraces
+      Type 4 (11%): Bluff/cliff     — near-vertical drop, minimal slope
+      Type 5 (10%): Wetland flat    — very flat near water, minimal reshaping
+
+    LAKE SHORES — probabilistic:
+      75%: bowl slope — terrain descends toward water
+      15%: cliff/bluff — minimal reshaping (naturally abrupt)
+      10%: flat terrace — slight shelf near the water
+
+    Mountain lakes are handled separately: their surrounding terrain is
+    gently raised to place the lake ON the mountain surface (not below it).
+    """
+    rng = np.random.default_rng(seed + 93711)
+
+    base = elevation.astype(np.float32)
+    shaped = base.copy()
+
+    river_water = is_river & land_mask
+    lake_water   = is_lake  & land_mask
+    has_river = river_water.any()
+    has_lake  = lake_water.any()
+
+    if not (has_river or has_lake):
+        return np.clip(shaped, 0.0, 1.0), {
+            'influenced_tiles': 0, 'changed_tiles': 0,
+            'mean_abs_delta': 0.0, 'max_abs_delta': 0.0,
+        }
+
+    h, w = base.shape
+
+    # ── Per-tile type masks (noise-based, spatially coherent) ─────────────────
+    # Use two independent smooth noise fields to pick bank type
+    noise_a = ndimage.gaussian_filter(rng.uniform(0, 1, (h, w)).astype(np.float32), sigma=4.0)
+    noise_b = ndimage.gaussian_filter(rng.uniform(0, 1, (h, w)).astype(np.float32), sigma=6.0)
+
+    # River bank type per tile (0-5)
+    river_type = np.zeros((h, w), dtype=np.int8)
+    # Thresholds: 0→35%, 1→53%, 2→67%, 3→79%, 4→90%, 5→100%
+    river_type[:] = 5
+    river_type[noise_a < 0.90] = 4
+    river_type[noise_a < 0.79] = 3
+    river_type[noise_a < 0.67] = 2
+    river_type[noise_a < 0.53] = 1
+    river_type[noise_a < 0.35] = 0
+
+    # Lake shore type per tile (0=bowl, 1=cliff, 2=terrace)
+    lake_type = np.zeros((h, w), dtype=np.int8)
+    lake_type[noise_b < 0.90] = 2  # terrace (top 10%)
+    lake_type[noise_b < 0.75] = 1  # cliff (15%)
+    lake_type[noise_b < 0.00] = 0  # bowl (75%) — assigned by negation above
+    # Cleaner logic:
+    lake_type[:] = 0                    # default: bowl
+    lake_type[noise_b > 0.75] = 1      # cliff
+    lake_type[noise_b > 0.90] = 2      # terrace
+
+    # ── Distance fields ────────────────────────────────────────────────────────
+    river_dist_raw = lake_dist_raw = None
+    river_nearest = lake_nearest = None
+    river_dist = np.full((h, w), np.inf, dtype=np.float32)
+    lake_dist  = np.full((h, w), np.inf, dtype=np.float32)
+    river_nearest_elev = lake_nearest_elev = None
+
+    if has_river:
+        river_dist_raw, river_nearest = ndimage.distance_transform_edt(
+            ~river_water, return_indices=True)
+        river_dist = river_dist_raw.astype(np.float32)
+        rny, rnx = river_nearest
+        river_nearest_elev = base[rny, rnx]
+
+    if has_lake:
+        lake_dist_raw, lake_nearest = ndimage.distance_transform_edt(
+            ~lake_water, return_indices=True)
+        lake_dist = lake_dist_raw.astype(np.float32)
+        lny, lnx = lake_nearest
+        lake_nearest_elev = base[lny, lnx]
+
+    # ── River bank delta per type ─────────────────────────────────────────────
+    river_delta = np.zeros((h, w), dtype=np.float32)
+    if has_river:
+        R = WATER_BANK_RIVER_RADIUS
+        prog = np.clip(river_dist / R, 0.0, 1.0)  # 0 at water edge, 1 at radius
+
+        # Type 0: V-valley — smooth power-law slope down to channel
+        t0 = np.power(prog, 1.8) * WATER_BANK_RIVER_RISE
+        target_0 = river_nearest_elev + t0
+
+        # Type 1: floodplain — near-flat bench for 40% of radius, then gentle rise
+        bench = np.clip(prog / 0.4, 0.0, 1.0)
+        t1 = np.power(bench, 2.2) * WATER_BANK_RIVER_RISE * 0.65
+        target_1 = river_nearest_elev + t1
+
+        # Type 2: levee/ridge — slight rise at bank edge (prog ~0.15) then back down
+        ridge = np.clip(np.sin(np.pi * np.minimum(prog, 0.3) / 0.3), 0.0, 1.0) * 0.025
+        t2 = np.power(prog, 1.5) * WATER_BANK_RIVER_RISE * 0.8 + ridge
+        target_2 = river_nearest_elev + t2
+
+        # Type 3: stepped terrace — two flat steps
+        step1 = (prog < 0.35).astype(np.float32) * WATER_BANK_RIVER_RISE * 0.30
+        step2 = ((prog >= 0.35) & (prog < 0.70)).astype(np.float32) * WATER_BANK_RIVER_RISE * 0.75
+        step3 = (prog >= 0.70).astype(np.float32) * WATER_BANK_RIVER_RISE
+        t3 = step1 + step2 + step3
+        target_3 = river_nearest_elev + t3
+
+        # Type 4: bluff/cliff — flat for 30% then sharp drop (minimal shaping)
+        t4 = np.where(prog < 0.3, 0.0, np.power((prog - 0.3) / 0.7, 3.0) * WATER_BANK_RIVER_RISE * 0.4)
+        target_4 = river_nearest_elev + t4
+
+        # Type 5: wetland flat — nearly no elevation change near water
+        t5 = prog * WATER_BANK_RIVER_RISE * 0.15
+        target_5 = river_nearest_elev + t5
+
+        # Select target by river_type
+        river_target = np.where(river_type == 0, target_0,
+                       np.where(river_type == 1, target_1,
+                       np.where(river_type == 2, target_2,
+                       np.where(river_type == 3, target_3,
+                       np.where(river_type == 4, target_4,
+                                               target_5)))))
+
+        in_radius = (river_dist <= R) & land_mask & ~(is_river | is_lake)
+        weight = np.clip(1.0 - (river_dist / (R + 1.0)), 0.0, 1.0) ** 1.6
+        delta = (river_target - shaped)
+        # Downhill toward river: type-dependent pull; uphill: suppress (types 2,3 allow small ridge)
+        allow_rise = (river_type == 2).astype(np.float32) * 0.40 + \
+                     (river_type == 3).astype(np.float32) * 0.15
+        delta_down = np.minimum(delta, 0.0) * WATER_BANK_SHAPE_STRENGTH * weight
+        delta_up   = np.maximum(delta, 0.0) * WATER_BANK_POSITIVE_BLEND * weight * allow_rise
+        river_delta[in_radius] = (delta_down + delta_up)[in_radius]
+
+    # ── Lake bank delta ────────────────────────────────────────────────────────
+    lake_delta = np.zeros((h, w), dtype=np.float32)
+    if has_lake:
+        LR = WATER_BANK_LAKE_RADIUS
+        lprog = np.clip(lake_dist / LR, 0.0, 1.0)
+
+        # Bowl: smooth slope down toward lake surface
+        l_bowl   = lake_nearest_elev + np.power(lprog, 1.6) * WATER_BANK_LAKE_RISE
+        # Cliff: nearly flat, only minimal pull
+        l_cliff  = lake_nearest_elev + lprog * WATER_BANK_LAKE_RISE * 0.12
+        # Terrace: gentle shelf then slight rise
+        shelf = np.clip(lprog / 0.35, 0.0, 1.0)
+        l_terr   = lake_nearest_elev + np.power(shelf, 2.5) * WATER_BANK_LAKE_RISE * 0.55
+
+        lake_target = np.where(lake_type == 0, l_bowl,
+                      np.where(lake_type == 1, l_cliff, l_terr))
+
+        in_lake_radius = (lake_dist <= LR) & land_mask & ~(is_river | is_lake)
+        lweight = np.clip(1.0 - (lake_dist / (LR + 1.2)), 0.0, 1.0) ** 1.7
+        ldelta = (lake_target - shaped)
+        # Cliffs: suppress downhill pull; bowls: full pull
+        bowl_mul = np.where(lake_type == 0, 1.0, np.where(lake_type == 2, 0.5, 0.08))
+        lake_delta_down = np.minimum(ldelta, 0.0) * WATER_BANK_SHAPE_STRENGTH * lweight * bowl_mul
+        lake_delta_up   = np.maximum(ldelta, 0.0) * WATER_BANK_POSITIVE_BLEND * lweight * 0.2
+        lake_delta[in_lake_radius] = (lake_delta_down + lake_delta_up)[in_lake_radius]
+
+    # ── Combine and clamp ─────────────────────────────────────────────────────
+    combined = river_delta + lake_delta
+    combined = np.clip(combined, -WATER_BANK_MAX_LOWERING, WATER_BANK_MAX_RAISING)
+    # Suppress near mountain peaks — don't erode peaks
+    high_land = base > 0.88
+    combined[high_land] *= 0.20
+    combined[~land_mask] = 0.0
+    combined[is_river | is_lake] = 0.0
+
+    shaped = shaped + combined
+
+    # ── Smooth transition ─────────────────────────────────────────────────────
+    influence = (np.abs(combined) > 1e-6)
+    smooth = ndimage.gaussian_filter(shaped, sigma=WATER_BANK_SMOOTH_SIGMA)
+    smooth_w = np.clip(
+        np.abs(combined) / max(WATER_BANK_MAX_LOWERING, 1e-6) * WATER_BANK_SMOOTH_BLEND,
+        0.0, WATER_BANK_SMOOTH_BLEND
+    )
+    smooth_w[~influence] = 0.0
+    shaped = shaped * (1.0 - smooth_w) + smooth * smooth_w
+
+    # Preserve hydrology exactly
+    shaped[is_river] = base[is_river]
+    shaped[is_lake]  = base[is_lake]
+
+    abs_delta = np.abs(shaped - base)
+    changed = influence & (abs_delta > 1e-6)
+    stats = {
+        'influenced_tiles': int(influence.sum()),
+        'changed_tiles':    int(changed.sum()),
+        'mean_abs_delta':   float(abs_delta[changed].mean()) if changed.any() else 0.0,
+        'max_abs_delta':    float(abs_delta.max()),
+    }
+    return np.clip(shaped, 0.0, 1.0), stats
 
 
 def river_stats_within_tolerance(reference_stats, candidate_stats):
@@ -4011,29 +4421,21 @@ def generate_temperature(width, height, elevation, is_land, dist_river, dist_lak
     - Elevation cooling (-elevation * TEMP_ELEVATION_FACTOR)
     - Water cooling from rivers (-TEMP_RIVER_COOLING_WEIGHT * exp(-dist_river / TEMP_RIVER_COOLING_DECAY))
     - Water cooling from lakes (-TEMP_LAKE_COOLING_WEIGHT * exp(-dist_lake / TEMP_LAKE_COOLING_DECAY))
-    
+
     Formula:
     temperature = latitude_factor - elevation*0.4 - 0.05*exp(-dist_river/10) - 0.08*exp(-dist_lake/15)
     """
-    temperature = np.zeros((height, width))
-    
-    for y in range(height):
-        for x in range(width):
-            # Latitude factor: 1.0 at equator (y=height/2), 0.0 at poles
-            latitude_factor = 1.0 - abs(y - height / 2) / (height / 2)
-            
-            # Elevation cooling
-            elev = elevation[y, x]
-            elevation_cooling = elev * TEMP_ELEVATION_FACTOR
-            
-            # Water cooling effects
-            river_cooling = TEMP_RIVER_COOLING_WEIGHT * np.exp(-dist_river[y, x] / TEMP_RIVER_COOLING_DECAY)
-            lake_cooling = TEMP_LAKE_COOLING_WEIGHT * np.exp(-dist_lake[y, x] / TEMP_LAKE_COOLING_DECAY)
-            
-            # Combined temperature
-            temp = latitude_factor - elevation_cooling - river_cooling - lake_cooling
-            temperature[y, x] = np.clip(temp, 0.0, 1.0)
-    
+    # Vectorised: build latitude factor as a broadcast column vector.
+    y_indices = np.arange(height, dtype=np.float32).reshape(-1, 1)
+    latitude_factor = 1.0 - np.abs(y_indices - height / 2.0) / (height / 2.0)
+    latitude_factor = np.broadcast_to(latitude_factor, (height, width))
+
+    elevation_cooling = elevation * TEMP_ELEVATION_FACTOR
+    river_cooling = TEMP_RIVER_COOLING_WEIGHT * np.exp(-dist_river / TEMP_RIVER_COOLING_DECAY)
+    lake_cooling   = TEMP_LAKE_COOLING_WEIGHT  * np.exp(-dist_lake  / TEMP_LAKE_COOLING_DECAY)
+
+    temperature = np.clip(latitude_factor - elevation_cooling - river_cooling - lake_cooling,
+                          0.0, 1.0).astype(np.float32)
     return temperature
 
 
@@ -7453,32 +7855,40 @@ def shrink_river_connected_lakes(is_lake, lake_ids, is_river, width, height, max
     return is_lake, lake_ids, lakes_shrunk, tiles_removed
 
 
-def grow_lake_with_constraints(start_x, start_y, target_size, elevation, is_land, 
+def grow_lake_with_constraints(start_x, start_y, target_size, elevation, is_land,
                                 is_mountain, is_lake, distance_from_ocean, width, height):
-    """Grow a lake respecting constraints."""
+    """Grow a lake respecting constraints.
+    Lakes near mountains are allowed to include mountain-adjacent tiles so they
+    sit naturally on the mountain shoulder rather than in a low valley.
+    """
+    # If the seed is within 6 tiles of a mountain, allow mountain tiles to be included
+    mtn_zone_check = ndimage.binary_dilation(is_mountain, iterations=6) if is_mountain.any() else np.zeros_like(is_mountain)
+    allow_mtn = bool(mtn_zone_check[start_y, start_x])
+
     lake_tiles = [(start_x, start_y)]
     frontier = [(start_x, start_y)]
     visited = {(start_x, start_y)}
-    
+
     while len(lake_tiles) < target_size and frontier:
         frontier_with_elev = [(elevation[y, x], x, y) for x, y in frontier]
         frontier_with_elev.sort()
-        
+
         _, cx, cy = frontier_with_elev[0]
         frontier.remove((cx, cy))
-        
+
         for dy, dx in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
             nx, ny = cx + dx, cy + dy
             if 0 <= nx < width and 0 <= ny < height:
                 if (nx, ny) not in visited:
-                    if (is_land[ny, nx] and not is_mountain[ny, nx] and 
-                        not is_lake[ny, nx] and distance_from_ocean[ny, nx] >= LAKE_COAST_BUFFER):
+                    mtn_ok = allow_mtn or not is_mountain[ny, nx]
+                    if (is_land[ny, nx] and mtn_ok and
+                            not is_lake[ny, nx] and distance_from_ocean[ny, nx] >= LAKE_COAST_BUFFER):
                         visited.add((nx, ny))
                         lake_tiles.append((nx, ny))
                         frontier.append((nx, ny))
                         if len(lake_tiles) >= target_size:
                             break
-    
+
     return lake_tiles
 
 
@@ -8728,471 +9138,313 @@ def generate_resource_noise(width, height, seed, scale=20, octaves=3):
     return noise
 
 
-def compute_geological_resources(elevation, slope, roughness, is_land, is_mountain, 
+def compute_geological_resources(elevation, slope, roughness, is_land, is_mountain,
                                   dist_river, biomes, width, height, seed):
     """
-    Compute geological resource potentials for each tile.
-    
-    Returns dict of 2D arrays:
-    - iron_potential: Iron ore likelihood (mountains, volcanic)
-    - copper_potential: Copper ore likelihood (mountains, hills)
-    - tin_potential: Tin ore likelihood (granite regions)
-    - gold_potential: Gold likelihood (mountains + placer in rivers)
-    - coal_potential: Coal likelihood (sedimentary basins)
-    - mineral_potential: General rare minerals
-    - rock_quantity: Available rock for construction
+    Compute geological resource potentials for each tile (fully vectorised).
     """
-    # Generate clustered noise for ore veins
-    iron_noise = generate_resource_noise(width, height, seed + 1001, scale=25)
-    copper_noise = generate_resource_noise(width, height, seed + 1002, scale=22)
-    tin_noise = generate_resource_noise(width, height, seed + 1003, scale=30)
-    gold_noise = generate_resource_noise(width, height, seed + 1004, scale=35)
-    coal_noise = generate_resource_noise(width, height, seed + 1005, scale=40)
+    iron_noise    = generate_resource_noise(width, height, seed + 1001, scale=25)
+    copper_noise  = generate_resource_noise(width, height, seed + 1002, scale=22)
+    tin_noise     = generate_resource_noise(width, height, seed + 1003, scale=30)
+    gold_noise    = generate_resource_noise(width, height, seed + 1004, scale=35)
+    coal_noise    = generate_resource_noise(width, height, seed + 1005, scale=40)
     mineral_noise = generate_resource_noise(width, height, seed + 1006, scale=28)
-    
-    # Initialize arrays
-    iron = np.zeros((height, width), dtype=np.float32)
-    copper = np.zeros((height, width), dtype=np.float32)
-    tin = np.zeros((height, width), dtype=np.float32)
-    gold = np.zeros((height, width), dtype=np.float32)
-    coal = np.zeros((height, width), dtype=np.float32)
-    minerals = np.zeros((height, width), dtype=np.float32)
-    rock = np.zeros((height, width), dtype=np.float32)
-    
-    for y in range(height):
-        for x in range(width):
-            if not is_land[y, x]:
-                continue
-            
-            elev = elevation[y, x]
-            slp = slope[y, x]
-            rough = roughness[y, x]
-            is_mtn = is_mountain[y, x]
-            biome = biomes[y, x]
-            river_dist = dist_river[y, x]
-            
-            # Base factors
-            mountain_factor = 1.0 if is_mtn else (0.3 + 0.4 * elev)
-            hill_factor = 0.5 + 0.5 * slp
-            rocky_biome = 1.0 if biome in ('rocky_mountains', 'rocky_hills', 'rock_desert', 'badlands') else 0.5
-            
-            # Iron: common in mountains, volcanic regions
-            iron_base = mountain_factor * 0.6 + rough * 0.2 + rocky_biome * 0.2
-            iron[y, x] = np.clip(iron_base * iron_noise[y, x] * 1.5, 0, 1)
-            
-            # Copper: mountains and hills
-            copper_base = mountain_factor * 0.5 + hill_factor * 0.3 + elev * 0.2
-            copper[y, x] = np.clip(copper_base * copper_noise[y, x] * 1.4, 0, 1)
-            
-            # Tin: granite regions (high elevation, rough terrain)
-            tin_base = elev * 0.4 + rough * 0.4 + mountain_factor * 0.2
-            tin[y, x] = np.clip(tin_base * tin_noise[y, x] * 1.3, 0, 1)
-            
-            # Gold: mountains + placer deposits near rivers downstream of mountains
-            gold_mountain = mountain_factor * 0.7
-            # Placer gold: near rivers, higher if downstream of mountains
-            placer_factor = max(0, 1 - river_dist / 5) * (1 - elev) * 0.5
-            gold_base = gold_mountain + placer_factor
-            gold[y, x] = np.clip(gold_base * gold_noise[y, x] * 1.2, 0, 1)
-            
-            # Coal: sedimentary basins (low elevation plains, former swamps)
-            sedimentary = BIOME_SEDIMENTARY.get(biome, 0.2)
-            lowland_factor = max(0, 1 - elev) * 0.6
-            coal_base = sedimentary * 0.5 + lowland_factor * 0.3 + (1 - slp) * 0.2
-            coal[y, x] = np.clip(coal_base * coal_noise[y, x] * 1.5, 0, 1)
-            
-            # General minerals: everywhere with terrain variation
-            mineral_base = rough * 0.4 + elev * 0.3 + slp * 0.3
-            minerals[y, x] = np.clip(mineral_base * mineral_noise[y, x] * 1.3, 0, 1)
-            
-            # Rock quantity: slope and roughness increase rock availability
-            rock[y, x] = np.clip(slp * 0.4 + rough * 0.4 + rocky_biome * 0.2, 0, 1)
-    
+
+    # Biome-based masks (vectorised lookup)
+    rocky_biomes = {'rocky_mountains', 'rocky_hills', 'rock_desert', 'badlands'}
+    sediment_map  = np.vectorize(lambda b: BIOME_SEDIMENTARY.get(b, 0.2))(biomes)
+    rocky_map     = np.vectorize(lambda b: 1.0 if b in rocky_biomes else 0.5)(biomes)
+
+    mtn = is_mountain.astype(np.float32)
+    mountain_factor = np.where(is_mountain, 1.0, 0.3 + 0.4 * elevation)
+    hill_factor     = 0.5 + 0.5 * slope
+    rocky_biome     = rocky_map
+
+    # Iron
+    iron_base = mountain_factor * 0.6 + roughness * 0.2 + rocky_biome * 0.2
+    iron = np.clip(iron_base * iron_noise * 1.5, 0.0, 1.0)
+
+    # Copper
+    copper_base = mountain_factor * 0.5 + hill_factor * 0.3 + elevation * 0.2
+    copper = np.clip(copper_base * copper_noise * 1.4, 0.0, 1.0)
+
+    # Tin
+    tin_base = elevation * 0.4 + roughness * 0.4 + mountain_factor * 0.2
+    tin = np.clip(tin_base * tin_noise * 1.3, 0.0, 1.0)
+
+    # Gold (mountain + placer near rivers)
+    gold_mountain = mountain_factor * 0.7
+    placer_factor = np.maximum(0.0, 1.0 - dist_river / 5.0) * (1.0 - elevation) * 0.5
+    gold_base = gold_mountain + placer_factor
+    gold = np.clip(gold_base * gold_noise * 1.2, 0.0, 1.0)
+
+    # Coal
+    lowland_factor = np.maximum(0.0, 1.0 - elevation) * 0.6
+    coal_base = sediment_map * 0.5 + lowland_factor * 0.3 + (1.0 - slope) * 0.2
+    coal = np.clip(coal_base * coal_noise * 1.5, 0.0, 1.0)
+
+    # General minerals
+    mineral_base = roughness * 0.4 + elevation * 0.3 + slope * 0.3
+    minerals = np.clip(mineral_base * mineral_noise * 1.3, 0.0, 1.0)
+
+    # Rock quantity
+    rock = np.clip(slope * 0.4 + roughness * 0.4 + rocky_biome * 0.2, 0.0, 1.0)
+
+    # Zero out ocean tiles
+    iron[~is_land] = 0.0; copper[~is_land] = 0.0; tin[~is_land] = 0.0
+    gold[~is_land] = 0.0; coal[~is_land] = 0.0; minerals[~is_land] = 0.0
+    rock[~is_land] = 0.0
+
     return {
-        'iron_potential': iron,
-        'copper_potential': copper,
-        'tin_potential': tin,
-        'gold_potential': gold,
-        'coal_potential': coal,
-        'mineral_potential': minerals,
-        'rock_quantity': rock
+        'iron_potential':    iron.astype(np.float32),
+        'copper_potential':  copper.astype(np.float32),
+        'tin_potential':     tin.astype(np.float32),
+        'gold_potential':    gold.astype(np.float32),
+        'coal_potential':    coal.astype(np.float32),
+        'mineral_potential': minerals.astype(np.float32),
+        'rock_quantity':     rock.astype(np.float32),
     }
 
 
 def compute_soil_properties(elevation, slope, roughness, moisture, temperature,
                             dist_river, biomes, is_land, width, height, seed):
     """
-    Compute soil-related properties for each tile.
-    
-    Returns dict of 2D arrays:
-    - soil_quantity: Amount of soil (low in mountains, high in plains/valleys)
-    - soil_fertility: Agricultural potential
-    - sediment_accumulation: Sediment deposit potential
+    Compute soil-related properties for each tile (fully vectorised).
     """
-    # Noise for soil variation
     soil_noise = generate_resource_noise(width, height, seed + 2001, scale=15)
-    
-    soil_qty = np.zeros((height, width), dtype=np.float32)
-    soil_fert = np.zeros((height, width), dtype=np.float32)
-    sediment = np.zeros((height, width), dtype=np.float32)
-    
-    for y in range(height):
-        for x in range(width):
-            if not is_land[y, x]:
-                continue
-            
-            elev = elevation[y, x]
-            slp = slope[y, x]
-            moist = moisture[y, x]
-            temp = temperature[y, x]
-            river_dist = dist_river[y, x]
-            biome = biomes[y, x]
-            
-            veg_density = BIOME_VEGETATION_DENSITY.get(biome, 0.3)
-            
-            # Soil quantity: high in plains/valleys, low in mountains/steep slopes
-            # River valleys accumulate soil
-            river_bonus = max(0, 1 - river_dist / 8) * 0.3
-            slope_penalty = slp * 0.6
-            elevation_penalty = max(0, elev - 0.5) * 0.4
-            
-            soil_base = 0.7 - slope_penalty - elevation_penalty + river_bonus
-            soil_qty[y, x] = np.clip(soil_base * (0.7 + 0.3 * soil_noise[y, x]), 0, 1)
-            
-            # Soil fertility: depends on moisture, temperature, vegetation, organic matter
-            # Forests and wetlands have high organic matter
-            organic_matter = veg_density * 0.4
-            
-            # Optimal temperature for fertility (not too hot, not too cold)
-            temp_factor = 1 - abs(temp - 0.5) * 1.2
-            temp_factor = max(0, temp_factor)
-            
-            # Moisture helps but waterlogged is less fertile
-            moist_factor = moist * 0.8 if moist < 0.85 else 0.85 - (moist - 0.85) * 2
-            moist_factor = max(0, moist_factor)
-            
-            # River proximity improves fertility (floodplains)
-            river_fertility = max(0, 1 - river_dist / 6) * 0.2
-            
-            fert_base = organic_matter + temp_factor * 0.25 + moist_factor * 0.25 + river_fertility
-            
-            # Desert and rocky biomes have very low fertility
-            if biome in ('sand_desert', 'rock_desert', 'rocky_mountains', 'rocky_hills', 'glacier', 'badlands'):
-                fert_base *= 0.2
-            
-            soil_fert[y, x] = np.clip(fert_base * soil_qty[y, x], 0, 1)
-            
-            # Sediment accumulation: river deltas, valleys, low slopes
-            sediment_base = river_bonus * 2 + (1 - slp) * 0.3 + (1 - elev) * 0.2
-            sediment[y, x] = np.clip(sediment_base, 0, 1)
-    
+
+    veg_density_map = np.vectorize(lambda b: BIOME_VEGETATION_DENSITY.get(b, 0.3))(biomes)
+
+    barren = {'sand_desert','rock_desert','rocky_mountains','rocky_hills','glacier','badlands'}
+    barren_mask = np.vectorize(lambda b: b in barren)(biomes)
+
+    # Soil quantity
+    river_bonus       = np.maximum(0.0, 1.0 - dist_river / 8.0) * 0.3
+    slope_penalty     = slope * 0.6
+    elevation_penalty = np.maximum(0.0, elevation - 0.5) * 0.4
+    soil_base         = 0.7 - slope_penalty - elevation_penalty + river_bonus
+    soil_qty = np.clip(soil_base * (0.7 + 0.3 * soil_noise), 0.0, 1.0)
+    soil_qty[~is_land] = 0.0
+
+    # Soil fertility
+    organic_matter  = veg_density_map * 0.4
+    temp_factor     = np.maximum(0.0, 1.0 - np.abs(temperature - 0.5) * 1.2)
+    moist_factor    = np.where(moisture < 0.85,
+                               moisture * 0.8,
+                               np.maximum(0.0, 0.85 - (moisture - 0.85) * 2.0))
+    river_fertility = np.maximum(0.0, 1.0 - dist_river / 6.0) * 0.2
+    fert_base       = organic_matter + temp_factor * 0.25 + moist_factor * 0.25 + river_fertility
+    fert_base       = np.where(barren_mask, fert_base * 0.2, fert_base)
+    soil_fert       = np.clip(fert_base * soil_qty, 0.0, 1.0)
+    soil_fert[~is_land] = 0.0
+
+    # Sediment accumulation
+    river_sed  = np.maximum(0.0, 1.0 - dist_river / 12.0) * 0.5
+    elev_sed   = np.maximum(0.0, 1.0 - elevation) * 0.3
+    slope_sed  = (1.0 - slope) * 0.2
+    sediment   = np.clip(river_sed + elev_sed + slope_sed, 0.0, 1.0)
+    sediment[~is_land] = 0.0
+
     return {
-        'soil_quantity': soil_qty,
-        'soil_fertility': soil_fert,
-        'sediment_accumulation': sediment
+        'soil_quantity':        soil_qty.astype(np.float32),
+        'soil_fertility':       soil_fert.astype(np.float32),
+        'sediment_accumulation':sediment.astype(np.float32),
     }
 
 
-def compute_water_resources(moisture, dist_river, dist_lake, dist_ocean, 
+def compute_water_resources(moisture, dist_river, dist_lake, dist_ocean,
                             is_land, is_river, is_lake, elevation, biomes,
                             width, height, seed):
     """
-    Compute water availability values for each tile.
-    
-    Returns dict of 2D arrays:
-    - fresh_water: Fresh water availability
-    - salt_water: Salt water availability (ocean/coastal)
-    - wild_water: Natural unmanaged water (wetlands, seasonal)
-    - groundwater_potential: Groundwater availability
+    Compute water availability values for each tile (fully vectorised).
     """
-    fresh = np.zeros((height, width), dtype=np.float32)
-    salt = np.zeros((height, width), dtype=np.float32)
-    wild = np.zeros((height, width), dtype=np.float32)
-    ground = np.zeros((height, width), dtype=np.float32)
-    
-    # Noise for groundwater variation
     ground_noise = generate_resource_noise(width, height, seed + 3001, scale=18)
-    
-    for y in range(height):
-        for x in range(width):
-            biome = biomes[y, x]
-            moist = moisture[y, x]
-            river_dist = dist_river[y, x]
-            lake_dist = dist_lake[y, x]
-            ocean_dist = dist_ocean[y, x]
-            elev = elevation[y, x]
-            
-            if not is_land[y, x]:
-                # Ocean tiles
-                salt[y, x] = 1.0
-                continue
-            
-            # Fresh water: rivers, lakes, high rainfall
-            river_water = max(0, 1 - river_dist / 10) * 0.5
-            lake_water = max(0, 1 - lake_dist / 8) * 0.4
-            rain_water = moist * 0.3
-            
-            if is_river[y, x]:
-                river_water = 1.0
-            if is_lake[y, x]:
-                lake_water = 1.0
-            
-            fresh[y, x] = np.clip(river_water + lake_water + rain_water, 0, 1)
-            
-            # Salt water: ocean and coastal tiles
-            coastal_salt = max(0, 1 - ocean_dist / 5) * 0.3
-            salt[y, x] = coastal_salt
-            
-            # Wild water: wetlands, seasonal streams, unmanaged
-            if biome in ('swamp', 'marsh', 'mangrove'):
-                wild[y, x] = 0.8 + moist * 0.2
-            elif moist > 0.7:
-                wild[y, x] = (moist - 0.7) * 2
-            else:
-                wild[y, x] = moist * 0.2
-            
-            # Groundwater: depends on soil depth (inverse of slope), rainfall, basins
-            soil_depth_factor = max(0, 1 - elev) * 0.4 + (1 - elevation[y, x]) * 0.2
-            rainfall_factor = moist * 0.4
-            basin_factor = (1 - elev) * 0.2  # Lower areas collect groundwater
-            
-            ground[y, x] = np.clip(
-                (soil_depth_factor + rainfall_factor + basin_factor) * ground_noise[y, x] * 1.3,
-                0, 1
-            )
-    
+
+    wetland_mask = np.vectorize(lambda b: b in ('swamp', 'marsh', 'mangrove'))(biomes)
+
+    # Fresh water
+    river_water = np.maximum(0.0, 1.0 - dist_river / 10.0) * 0.5
+    lake_water  = np.maximum(0.0, 1.0 - dist_lake  /  8.0) * 0.4
+    rain_water  = moisture * 0.3
+    river_water = np.where(is_river, 1.0, river_water)
+    lake_water  = np.where(is_lake,  1.0, lake_water)
+    fresh = np.clip(river_water + lake_water + rain_water, 0.0, 1.0)
+    fresh[~is_land] = 0.0
+
+    # Salt water
+    salt = np.where(is_land,
+                    np.clip(np.maximum(0.0, 1.0 - dist_ocean / 5.0) * 0.3, 0.0, 1.0),
+                    1.0).astype(np.float32)
+
+    # Wild water
+    wild = np.where(wetland_mask,
+                    0.8 + moisture * 0.2,
+                    np.where(moisture > 0.7,
+                             (moisture - 0.7) * 2.0,
+                             moisture * 0.2))
+    wild = np.clip(wild, 0.0, 1.0).astype(np.float32)
+    wild[~is_land] = 0.0
+
+    # Groundwater
+    soil_depth_factor = np.maximum(0.0, 1.0 - elevation) * 0.4 + (1.0 - elevation) * 0.2
+    rainfall_factor   = moisture * 0.4
+    basin_factor      = (1.0 - elevation) * 0.2
+    ground = np.clip((soil_depth_factor + rainfall_factor + basin_factor) * ground_noise * 1.3,
+                     0.0, 1.0).astype(np.float32)
+    ground[~is_land] = 0.0
+
     return {
-        'fresh_water': fresh,
-        'salt_water': salt,
-        'wild_water': wild,
-        'groundwater_potential': ground
+        'fresh_water':         fresh.astype(np.float32),
+        'salt_water':          salt,
+        'wild_water':          wild,
+        'groundwater_potential': ground,
     }
 
 
 def compute_biological_capacity(biomes, soil_fertility, moisture, temperature,
                                  fresh_water, is_land, width, height, seed):
     """
-    Compute biological capacity values for each tile.
-    
-    Returns dict of 2D arrays:
-    - wood_biomass_capacity: Forest biomass potential
-    - animal_habitat_capacity: Wildlife support capacity
-    - plant_diversity_capacity: Plant species diversity potential
-    - insect_population_capacity: Insect population support
+    Compute biological capacity values for each tile (fully vectorised).
     """
-    wood = np.zeros((height, width), dtype=np.float32)
-    animal = np.zeros((height, width), dtype=np.float32)
-    plant = np.zeros((height, width), dtype=np.float32)
-    insect = np.zeros((height, width), dtype=np.float32)
-    
-    for y in range(height):
-        for x in range(width):
-            if not is_land[y, x]:
-                continue
-            
-            biome = biomes[y, x]
-            fert = soil_fertility[y, x]
-            moist = moisture[y, x]
-            temp = temperature[y, x]
-            water = fresh_water[y, x]
-            
-            veg_density = BIOME_VEGETATION_DENSITY.get(biome, 0.3)
-            
-            # Wood biomass: forests have high capacity
-            if biome in ('rainforest', 'tropical_forest', 'temperate_forest', 'woodland', 
-                        'forest_mountains', 'forest_hills', 'snow_forest'):
-                wood[y, x] = veg_density * 0.7 + fert * 0.2 + moist * 0.1
-            elif biome in ('swamp', 'mangrove'):
-                wood[y, x] = veg_density * 0.5  # Wetland trees
-            else:
-                wood[y, x] = veg_density * 0.2  # Scattered trees
-            
-            # Animal habitat: depends on vegetation, water, and climate diversity
-            habitat_base = veg_density * 0.4 + water * 0.3 + fert * 0.2
-            # Moderate temperatures support more wildlife
-            temp_habitat = 1 - abs(temp - 0.55) * 1.5
-            temp_habitat = max(0, temp_habitat)
-            animal[y, x] = np.clip(habitat_base + temp_habitat * 0.1, 0, 1)
-            
-            # Plant diversity: tropical and temperate regions with moisture
-            diversity_base = moist * 0.4 + fert * 0.3 + veg_density * 0.2
-            # Tropics have highest diversity
-            if temp > 0.6 and moist > 0.5:
-                diversity_base += 0.2
-            plant[y, x] = np.clip(diversity_base, 0, 1)
-            
-            # Insect population: wetlands and warm moist regions
-            insect_base = moist * 0.4 + temp * 0.3 + veg_density * 0.2
-            if biome in ('swamp', 'marsh', 'mangrove', 'tropical_forest', 'rainforest'):
-                insect_base += 0.3
-            # Cold reduces insects
-            if temp < 0.3:
-                insect_base *= temp / 0.3
-            insect[y, x] = np.clip(insect_base, 0, 1)
-    
+    veg_density_map = np.vectorize(lambda b: BIOME_VEGETATION_DENSITY.get(b, 0.3))(biomes)
+
+    forest_biomes  = {'rainforest','tropical_forest','temperate_forest','woodland',
+                      'forest_mountains','forest_hills','snow_forest'}
+    wetland_trees  = {'swamp', 'mangrove'}
+    wet_insect     = {'swamp','marsh','mangrove','tropical_forest','rainforest'}
+
+    is_forest  = np.vectorize(lambda b: b in forest_biomes)(biomes)
+    is_wetree  = np.vectorize(lambda b: b in wetland_trees)(biomes)
+    is_wetins  = np.vectorize(lambda b: b in wet_insect)(biomes)
+
+    vd = veg_density_map
+
+    # Wood biomass
+    wood = np.where(is_forest,
+                    vd * 0.7 + soil_fertility * 0.2 + moisture * 0.1,
+                    np.where(is_wetree, vd * 0.5, vd * 0.2))
+    wood = np.clip(wood, 0.0, 1.0).astype(np.float32)
+    wood[~is_land] = 0.0
+
+    # Animal habitat
+    habitat_base = vd * 0.4 + fresh_water * 0.3 + soil_fertility * 0.2
+    temp_habitat  = np.maximum(0.0, 1.0 - np.abs(temperature - 0.55) * 1.5)
+    animal = np.clip(habitat_base + temp_habitat * 0.1, 0.0, 1.0).astype(np.float32)
+    animal[~is_land] = 0.0
+
+    # Plant diversity
+    diversity_base = moisture * 0.4 + soil_fertility * 0.3 + vd * 0.2
+    tropical_boost = np.where((temperature > 0.6) & (moisture > 0.5), 0.2, 0.0)
+    plant = np.clip(diversity_base + tropical_boost, 0.0, 1.0).astype(np.float32)
+    plant[~is_land] = 0.0
+
+    # Insect population
+    insect_base = moisture * 0.4 + temperature * 0.3 + vd * 0.2
+    insect_base = np.where(is_wetins, insect_base + 0.3, insect_base)
+    cold_scale  = np.where(temperature < 0.3, temperature / 0.3, 1.0)
+    insect = np.clip(insect_base * cold_scale, 0.0, 1.0).astype(np.float32)
+    insect[~is_land] = 0.0
+
     return {
-        'wood_biomass_capacity': wood,
-        'animal_habitat_capacity': animal,
-        'plant_diversity_capacity': plant,
-        'insect_population_capacity': insect
+        'wood_biomass_capacity':     wood,
+        'animal_habitat_capacity':   animal,
+        'plant_diversity_capacity':  plant,
+        'insect_population_capacity':insect,
     }
 
 
-def compute_climate_exposure(moisture, temperature, slope, elevation, 
+def compute_climate_exposure(moisture, temperature, slope, elevation,
                               is_land, biomes, width, height, seed):
     """
-    Compute climate exposure values for each tile.
-    
-    Returns dict of 2D arrays:
-    - rain_exposure: Rainfall exposure factor
-    - sunlight_exposure: Sunlight availability factor
+    Compute climate exposure values for each tile (fully vectorised).
     """
-    rain = np.zeros((height, width), dtype=np.float32)
-    sun = np.zeros((height, width), dtype=np.float32)
-    
-    for y in range(height):
-        for x in range(width):
-            if not is_land[y, x]:
-                continue
-            
-            moist = moisture[y, x]
-            temp = temperature[y, x]
-            slp = slope[y, x]
-            elev = elevation[y, x]
-            biome = biomes[y, x]
-            veg_density = BIOME_VEGETATION_DENSITY.get(biome, 0.3)
-            
-            # Rain exposure: moisture + terrain effects
-            # Slopes facing prevailing wind get more rain
-            rain_base = moist * 0.7 + (1 - elev) * 0.2
-            # Mountains can block or enhance rain
-            terrain_effect = slp * 0.1
-            rain[y, x] = np.clip(rain_base + terrain_effect, 0, 1)
-            
-            # Sunlight exposure: latitude (via temp), slope orientation, vegetation shade
-            # Use y position as proxy for latitude
-            lat_factor = 1 - abs(y / height - 0.5) * 0.4  # Equator gets more sun
-            
-            # Elevation increases sun exposure (above clouds)
-            elev_factor = elev * 0.15
-            
-            # Dense vegetation reduces ground-level sunlight
-            shade_factor = veg_density * 0.25
-            
-            # Steep slopes may reduce effective sunlight
-            slope_factor = slp * 0.1
-            
-            sun[y, x] = np.clip(lat_factor + elev_factor - shade_factor - slope_factor, 0, 1)
-    
+    veg_density_map = np.vectorize(lambda b: BIOME_VEGETATION_DENSITY.get(b, 0.3))(biomes)
+
+    # Rain exposure
+    rain_base      = moisture * 0.7 + (1.0 - elevation) * 0.2
+    terrain_effect = slope * 0.1
+    rain = np.clip(rain_base + terrain_effect, 0.0, 1.0).astype(np.float32)
+    rain[~is_land] = 0.0
+
+    # Sunlight exposure (vectorised lat factor using y index)
+    y_idx    = np.arange(height, dtype=np.float32).reshape(-1, 1) / height
+    lat_factor = 1.0 - np.abs(y_idx - 0.5) * 0.4
+    lat_factor = np.broadcast_to(lat_factor, (height, width)).copy()
+
+    elev_factor  = elevation * 0.15
+    shade_factor = veg_density_map * 0.25
+    slope_factor = slope * 0.1
+    sun = np.clip(lat_factor + elev_factor - shade_factor - slope_factor, 0.0, 1.0).astype(np.float32)
+    sun[~is_land] = 0.0
+
     return {
-        'rain_exposure': rain,
-        'sunlight_exposure': sun
+        'rain_exposure':     rain,
+        'sunlight_exposure': sun,
     }
 
 
 def compute_fuel_resources(wood_biomass, biomes, moisture, soil_fertility,
                             coal_potential, is_land, width, height, seed):
     """
-    Compute natural fuel resource potentials.
-    
-    Returns dict of 2D arrays:
-    - biomass_fuel_potential: Wood and plant fuel availability
-    - peat_potential: Peat deposits in wetlands
-    - fossil_fuel_potential: Oil and gas potential
+    Compute natural fuel resource potentials (fully vectorised).
     """
-    biomass = np.zeros((height, width), dtype=np.float32)
-    peat = np.zeros((height, width), dtype=np.float32)
-    fossil = np.zeros((height, width), dtype=np.float32)
-    
-    # Noise for fossil fuel deposits
     fossil_noise = generate_resource_noise(width, height, seed + 4001, scale=45)
-    
-    for y in range(height):
-        for x in range(width):
-            if not is_land[y, x]:
-                continue
-            
-            biome = biomes[y, x]
-            moist = moisture[y, x]
-            fert = soil_fertility[y, x]
-            wood = wood_biomass[y, x]
-            coal = coal_potential[y, x]
-            
-            # Biomass fuel: correlates with wood biomass
-            biomass[y, x] = wood * 0.8 + fert * 0.2
-            
-            # Peat: wetlands with high organic accumulation
-            if biome in ('swamp', 'marsh'):
-                peat_base = 0.6 + moist * 0.3 + fert * 0.1
-            elif biome == 'mangrove':
-                peat_base = 0.4 + moist * 0.2
-            elif moist > 0.75:
-                peat_base = (moist - 0.75) * 2
-            else:
-                peat_base = 0
-            peat[y, x] = np.clip(peat_base, 0, 1)
-            
-            # Fossil fuel: sedimentary basins, correlated with coal but different distribution
-            sedimentary = BIOME_SEDIMENTARY.get(biome, 0.2)
-            fossil_base = sedimentary * 0.4 + coal * 0.3
-            fossil[y, x] = np.clip(fossil_base * fossil_noise[y, x] * 1.5, 0, 1)
-    
+
+    sediment_map = np.vectorize(lambda b: BIOME_SEDIMENTARY.get(b, 0.2))(biomes)
+    swamp_marsh  = np.vectorize(lambda b: b in ('swamp', 'marsh'))(biomes)
+    mangrove_m   = np.vectorize(lambda b: b == 'mangrove')(biomes)
+
+    # Biomass fuel
+    biomass = np.clip(wood_biomass * 0.8 + soil_fertility * 0.2, 0.0, 1.0)
+    biomass[~is_land] = 0.0
+
+    # Peat
+    peat = np.where(swamp_marsh,
+                    np.clip(0.6 + moisture * 0.3 + soil_fertility * 0.1, 0.0, 1.0),
+                    np.where(mangrove_m,
+                             np.clip(0.4 + moisture * 0.2, 0.0, 1.0),
+                             np.where(moisture > 0.75,
+                                      np.clip((moisture - 0.75) * 2.0, 0.0, 1.0),
+                                      0.0))).astype(np.float32)
+    peat[~is_land] = 0.0
+
+    # Fossil fuel
+    fossil_base = sediment_map * 0.4 + coal_potential * 0.3
+    fossil = np.clip(fossil_base * fossil_noise * 1.5, 0.0, 1.0).astype(np.float32)
+    fossil[~is_land] = 0.0
+
     return {
-        'biomass_fuel_potential': biomass,
-        'peat_potential': peat,
-        'fossil_fuel_potential': fossil
+        'biomass_fuel_potential': biomass.astype(np.float32),
+        'peat_potential':         peat,
+        'fossil_fuel_potential':  fossil,
     }
 
 
-def compute_resource_accessibility(slope, roughness, elevation, biomes, 
+def compute_resource_accessibility(slope, roughness, elevation, biomes,
                                     dist_river, is_land, width, height):
     """
-    Compute accessibility factors for resource extraction.
-    
-    Returns dict of 2D arrays:
-    - mineral_accessibility: Ease of mining operations
-    - water_accessibility: Ease of water access
+    Compute accessibility factors for resource extraction (fully vectorised).
     """
-    mineral_acc = np.zeros((height, width), dtype=np.float32)
-    water_acc = np.zeros((height, width), dtype=np.float32)
-    
-    for y in range(height):
-        for x in range(width):
-            if not is_land[y, x]:
-                continue
-            
-            slp = slope[y, x]
-            rough = roughness[y, x]
-            elev = elevation[y, x]
-            biome = biomes[y, x]
-            river_dist = dist_river[y, x]
-            
-            # Mineral accessibility: reduced by steep slopes, high roughness
-            # River valleys improve accessibility
-            slope_penalty = slp * 0.4
-            roughness_penalty = rough * 0.3
-            river_bonus = max(0, 1 - river_dist / 10) * 0.2
-            
-            # Dense forests reduce accessibility
-            if biome in ('rainforest', 'tropical_forest', 'swamp', 'mangrove'):
-                vegetation_penalty = 0.2
-            else:
-                vegetation_penalty = 0
-            
-            mineral_acc[y, x] = np.clip(
-                0.8 - slope_penalty - roughness_penalty - vegetation_penalty + river_bonus,
-                0.1, 1
-            )
-            
-            # Water accessibility: proximity to rivers/lakes, terrain
-            river_access = max(0, 1 - river_dist / 8)
-            terrain_factor = 1 - slp * 0.3
-            
-            water_acc[y, x] = np.clip(river_access * 0.6 + terrain_factor * 0.4, 0, 1)
-    
+    dense_veg = np.vectorize(lambda b: b in ('rainforest','tropical_forest','swamp','mangrove'))(biomes)
+
+    # Mineral accessibility
+    slope_penalty      = slope * 0.4
+    roughness_penalty  = roughness * 0.3
+    river_bonus        = np.maximum(0.0, 1.0 - dist_river / 10.0) * 0.2
+    vegetation_penalty = np.where(dense_veg, 0.2, 0.0)
+    mineral_acc = np.clip(0.8 - slope_penalty - roughness_penalty - vegetation_penalty + river_bonus,
+                          0.1, 1.0)
+    mineral_acc[~is_land] = 0.0
+
+    # Water accessibility
+    river_access  = np.maximum(0.0, 1.0 - dist_river / 8.0)
+    terrain_factor = 1.0 - slope * 0.3
+    water_acc = np.clip(river_access * 0.6 + terrain_factor * 0.4, 0.0, 1.0)
+    water_acc[~is_land] = 0.0
+
     return {
-        'mineral_accessibility': mineral_acc,
-        'water_accessibility': water_acc
+        'mineral_accessibility': mineral_acc.astype(np.float32),
+        'water_accessibility':   water_acc.astype(np.float32),
     }
 
 
@@ -9315,6 +9567,97 @@ def get_tile_environment_data(tile_env, y, x):
 
 
 # =============================================================================
+# MOUNTAIN LAKE ELEVATION FIX
+# =============================================================================
+def fix_mountain_lake_elevation(elevation, is_lake, is_mountain, is_land, width, height):
+    """
+    Fix mountain lakes that sit in holes excavated from the mountain surface.
+
+    The root cause: lake tiles inherit low elevation values (they're placed in
+    topographic depressions), but near mountains those depressions can be
+    0.20–0.60 below the surrounding mountain mean — making the lake appear to
+    punch a hole into the mountain rather than sitting naturally on its shoulder.
+
+    Strategy:
+      1. Find every connected lake region that is adjacent to mountain tiles.
+      2. Compute the 'natural surface elevation' at that location as the median
+         of mountain tiles within a search radius.
+      3. Raise the lake tile elevations to a fraction of that natural surface
+         (typically 85–92%), so the lake sits ON the mountainside.
+      4. Gently blend the surrounding non-lake land tiles upward to match,
+         creating a natural bowl at the correct altitude.
+
+    Non-mountain lakes are left completely unchanged.
+    """
+    from scipy import ndimage as _ndi
+
+    out = elevation.astype(np.float32).copy()
+
+    if not (is_lake.any() and is_mountain.any()):
+        return out
+
+    # Dilate mountains to find the "mountain zone" (within 8 tiles)
+    mtn_zone = _ndi.binary_dilation(is_mountain, iterations=8)
+
+    # Label all lake regions
+    lake_labeled, n_lakes = _ndi.label(is_lake)
+    if n_lakes == 0:
+        return out
+
+    mtn_raised = 0
+    for lid in range(1, n_lakes + 1):
+        this_lake = lake_labeled == lid
+        if not (this_lake & mtn_zone).any():
+            continue  # not a mountain lake — skip
+
+        # Gather mountain tile elevations in a 10-tile radius around the lake
+        ys, xs = np.where(this_lake)
+        cy = int(ys.mean()); cx = int(xs.mean())
+        r = 10
+        yslice = slice(max(0, cy - r), min(height, cy + r + 1))
+        xslice = slice(max(0, cx - r), min(width,  cx + r + 1))
+        nb_mtn = is_mountain[yslice, xslice]
+        if nb_mtn.sum() < 4:
+            continue
+
+        nb_elev = out[yslice, xslice][nb_mtn]
+        mtn_median = float(np.median(nb_elev))
+        mtn_p25    = float(np.percentile(nb_elev, 25))
+
+        # Natural lake elevation: sit at ~80% of surrounding mountain median
+        # but no lower than P25 of mountain tiles (keeps it ON the mountain)
+        natural_lake_elev = max(mtn_p25 * 0.92, mtn_median * 0.82)
+
+        current_lake_mean = float(out[this_lake].mean())
+        if natural_lake_elev <= current_lake_mean + 0.02:
+            continue  # already at appropriate height
+
+        # Raise lake tiles — no more than +0.25 to avoid breaking hydrology
+        delta = min(natural_lake_elev - current_lake_mean, 0.25)
+        out[this_lake] = np.clip(out[this_lake] + delta, 0.0, 1.0)
+
+        # Blend surrounding land upward to create a gentle bowl at the new altitude
+        # (within 6 tiles of the lake boundary)
+        shore_dist = _ndi.distance_transform_edt(~this_lake).astype(np.float32)
+        blend_zone = is_land & ~is_lake & (shore_dist <= 6.0)
+        if blend_zone.any():
+            blend_w = np.clip(1.0 - shore_dist / 6.0, 0.0, 1.0) ** 1.5
+            # Pull shore toward natural_lake_elev, max delta = 0.15
+            shore_delta = np.clip(
+                (natural_lake_elev - out) * blend_w * 0.55,
+                -0.04, 0.15
+            )
+            out[blend_zone] = np.clip(out[blend_zone] + shore_delta[blend_zone], 0.0, 1.0)
+
+        mtn_raised += 1
+
+    if mtn_raised > 0:
+        print(f"  - Mountain lake elevation fix: raised {mtn_raised} lake region(s) onto mountain surface")
+
+    return np.clip(out, 0.0, 1.0).astype(np.float32)
+
+
+# =============================================================================
 # MAIN GENERATION FUNCTION
 # =============================================================================
 def generate_world(seed):
@@ -9387,15 +9730,14 @@ def generate_world(seed):
     # Generate lakes AFTER rivers - lakes can overlap rivers (as reservoirs)
     step_header(8, "Generating lakes (targeting 2-5% of land)...")
     is_lake, lake_ids, lake_sizes = generate_lakes(width, height, seed, elevation, is_land, is_mountain, dist_ocean)
-    
+
     # Shrink lakes that touch rivers to create widened river sections
     is_lake, lake_ids, lakes_shrunk, tiles_removed = shrink_river_connected_lakes(
         is_lake, lake_ids, is_river, width, height, max_river_lake_width=2
     )
-    
+
     lake_count = is_lake.sum()
     num_lakes = len(lake_sizes)
-    # Count lakes that overlap rivers (now should be thinner "river widenings")
     reservoir_tiles = (is_lake & is_river).sum()
     print(f"  - Lake tiles: {lake_count} ({lake_count/land_count*100:.2f}% of land, target: {LAKE_PERCENT_MIN*100:.0f}-{LAKE_PERCENT_MAX*100:.0f}%)")
     print(f"  - Number of lakes: {num_lakes}")
@@ -9405,6 +9747,29 @@ def generate_world(seed):
     print(f"  - Min lake size: {MIN_LAKE_SIZE} tiles")
     if lake_sizes:
         print(f"  - Original lake sizes: min={min(lake_sizes)}, max={max(lake_sizes)}, avg={np.mean(lake_sizes):.1f}")
+
+    # ── Mountain lake elevation fix ──────────────────────────────────────────
+    # Problem: lakes near mountains get placed as holes in the mountain (elevation
+    # much lower than surrounding peaks). Fix: raise mountain-adjacent lake tiles
+    # to the median elevation of nearby mountain tiles, then smooth the surroundings
+    # so the lake sits ON the mountain surface rather than being excavated from it.
+    elevation = fix_mountain_lake_elevation(elevation, is_lake, is_mountain, is_land, width, height)
+
+    if ENABLE_WATER_BANK_SHAPING and not ENABLE_BIOME_ELEVATION_RESHAPING:
+        elevation, bank_stats = shape_terrain_around_inland_water(
+            elevation,
+            is_land,
+            is_river,
+            is_lake,
+            seed=seed,
+        )
+        print(
+            "  - Post-water bank shaping:"
+            f" influenced={bank_stats['influenced_tiles']},"
+            f" changed={bank_stats['changed_tiles']},"
+            f" mean|delta|={bank_stats['mean_abs_delta']:.4f},"
+            f" max|delta|={bank_stats['max_abs_delta']:.4f}"
+        )
     
     step_header(9, "Computing distance fields for rivers and lakes...")
     # Rivers are already generated in Step 7 using the advanced pipeline.
@@ -9675,6 +10040,22 @@ def generate_world(seed):
                     if prune_mask[ry, rx]:
                         del river_hierarchy[(ry, rx)]
             print(f"  - Post-reshape cleanup: pruned {pruned} disconnected river tiles")
+
+        if ENABLE_WATER_BANK_SHAPING:
+            elevation, bank_stats = shape_terrain_around_inland_water(
+                elevation,
+                is_land_with_islands,
+                is_river,
+                is_lake,
+                seed=seed,
+            )
+            print(
+                "  - Post-hydrology bank shaping:"
+                f" influenced={bank_stats['influenced_tiles']},"
+                f" changed={bank_stats['changed_tiles']},"
+                f" mean|delta|={bank_stats['mean_abs_delta']:.4f},"
+                f" max|delta|={bank_stats['max_abs_delta']:.4f}"
+            )
 
         dist_river = compute_distance_from_rivers(is_river, width, height)
         dist_lake = compute_distance_from_lakes(is_lake, width, height)

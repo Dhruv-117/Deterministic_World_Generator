@@ -1,0 +1,1200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Voxel World Renderer</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#060c18;color:#c8bfa0;font-family:'Georgia',serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+#setup{width:100%;max-width:860px;padding:1.5rem 1rem;display:flex;flex-direction:column;align-items:center;}
+h1{font-size:1.5rem;color:#b8953a;letter-spacing:.1em;margin-bottom:.2rem;text-align:center;font-weight:normal}
+.sub{font-size:.7rem;color:#3a4a5a;font-family:monospace;margin-bottom:1.4rem;text-align:center}
+.panel{background:rgba(8,14,24,0.85);border:1px solid #1a2535;border-radius:10px;padding:1.1rem 1.3rem;width:100%;margin-bottom:.9rem}
+.panel h2{font-size:.65rem;text-transform:uppercase;letter-spacing:.14em;color:#3a4a5a;margin-bottom:.8rem}
+.upload-row{display:grid;grid-template-columns:1fr 1fr;gap:.7rem;margin-bottom:.8rem}
+.ubox{border:1px dashed #1e2e42;border-radius:7px;padding:.8rem;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;position:relative;overflow:hidden}
+.ubox:hover{border-color:#b8953a;background:rgba(184,149,58,0.04)}
+.ubox.ok{border-color:#2e7d32;border-style:solid;background:rgba(46,125,50,0.06)}
+.ubox input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.ubox .ico{font-size:1.3rem;display:block;margin-bottom:.25rem}
+.ubox .lbl{font-size:.7rem;color:#3a4a5a}
+.ubox .fn{font-size:.65rem;color:#2e7d32;font-family:monospace;margin-top:.2rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ctrl-row{display:flex;gap:.7rem;align-items:flex-end;flex-wrap:wrap}
+.ctrl{display:flex;flex-direction:column;gap:3px}
+.ctrl label{font-size:.62rem;text-transform:uppercase;letter-spacing:.1em;color:#3a4a5a}
+select,input[type=range]{background:#060c18;border:1px solid #1a2535;color:#c8bfa0;border-radius:5px;padding:.3rem .55rem;font-size:.78rem}
+input[type=range]{padding:0;height:26px;width:110px;cursor:pointer}
+select{cursor:pointer}select:focus,input:focus{outline:none;border-color:#b8953a}
+.btn{background:#b8953a;color:#060c18;border:none;border-radius:6px;padding:.42rem 1.1rem;font-size:.82rem;font-weight:bold;cursor:pointer;letter-spacing:.05em;transition:background .15s,transform .1s;margin-top:auto;white-space:nowrap}
+.btn:hover{background:#d4ae55}.btn:active{transform:scale(.97)}.btn:disabled{background:#1a2535;color:#2a3a4a;cursor:not-allowed}
+.prog{display:none;background:rgba(6,12,24,0.9);border:1px solid #1a2535;border-radius:8px;padding:.8rem 1.2rem;width:100%;margin-bottom:.9rem}
+.pb{background:#0d1a2a;border-radius:3px;height:4px;margin-top:.5rem;overflow:hidden}
+.pf{height:100%;background:linear-gradient(90deg,#6a5018,#b8953a,#d4ae55);border-radius:3px;width:0%;transition:width .2s}
+.stg{font-family:monospace;font-size:.68rem;color:#3a4a5a;margin-top:.25rem}
+#viewport{display:none;position:fixed;inset:0;background:#060c18;}
+#threeCanvas{display:block;width:100%;height:100%;}
+#hud{position:fixed;bottom:0;left:0;right:0;display:none;pointer-events:none;padding:.6rem 1rem;background:linear-gradient(transparent,rgba(3,8,18,0.88));}
+.hud-inner{display:flex;justify-content:space-between;align-items:flex-end;max-width:1200px;margin:0 auto;pointer-events:all;}
+.hud-hint{font-size:.62rem;color:#3a4a5a;font-family:monospace;line-height:1.8}
+.hud-hint span{color:#7a8a6a}
+#modeBtn{background:transparent;border:1px solid #b8953a;color:#b8953a;border-radius:5px;padding:.28rem .7rem;font-size:.72rem;cursor:pointer;font-family:monospace;letter-spacing:.06em;transition:background .15s;}
+#modeBtn:hover{background:rgba(184,149,58,.15)}
+#modeLbl{font-size:.62rem;font-family:monospace;color:#3a4a5a;text-align:right;margin-bottom:.18rem}
+#backBtn{background:transparent;border:1px solid #1a2535;color:#3a4a5a;border-radius:5px;padding:.28rem .7rem;font-size:.68rem;cursor:pointer;font-family:monospace;margin-left:.5rem;transition:color .15s,border-color .15s;}
+#backBtn:hover{color:#b8953a;border-color:#b8953a}
+#crosshair{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);display:none;pointer-events:none;color:rgba(200,191,160,0.6);font-size:1.2rem;line-height:1;font-family:monospace;}
+
+/* ── Tab system ── */
+.tab-bar{display:flex;gap:0;width:100%;max-width:860px;margin-bottom:0;border-bottom:1px solid #1a2535;}
+.tab-btn{background:transparent;border:1px solid #1a2535;border-bottom:none;color:#3a4a5a;padding:.42rem 1.1rem;font-size:.75rem;font-family:monospace;letter-spacing:.08em;cursor:pointer;transition:color .15s,background .15s;border-radius:6px 6px 0 0;margin-right:2px;}
+.tab-btn:hover{color:#c8bfa0;background:rgba(184,149,58,0.05)}
+.tab-btn.active{color:#b8953a;background:rgba(8,14,24,0.85);border-color:#1a2535;border-bottom:1px solid #060c18;}
+.tab-pane{display:none;width:100%;max-width:860px;}
+.tab-pane.active{display:flex;flex-direction:column;align-items:center;}
+
+/* ── Map Art panel ── */
+#mapart-status{font-family:monospace;font-size:.7rem;color:#3a4a5a;margin:.5rem 0;min-height:1.2rem;text-align:center;}
+#mapart-status.running{color:#b8953a;}
+#mapart-status.done{color:#4a8a4a;}
+#mapart-status.err{color:#8a3a3a;}
+.mapart-img-wrap{width:100%;border:1px solid #1a2535;border-radius:8px;overflow:hidden;background:#0a1018;display:none;margin-bottom:.6rem;position:relative;}
+.mapart-img-wrap img{display:block;width:100%;height:auto;}
+.prompt-box{width:100%;background:#060c18;border:1px solid #1a2535;border-radius:6px;color:#c8bfa0;font-family:monospace;font-size:.68rem;padding:.6rem .8rem;resize:vertical;min-height:110px;line-height:1.55;}
+.prompt-box:focus{outline:none;border-color:#b8953a;}
+.mapart-row{display:flex;gap:.6rem;width:100%;margin-top:.5rem;align-items:center;flex-wrap:wrap;}
+#genBtn{flex:1;min-width:120px;}
+.dl-btn{background:transparent;border:1px solid #b8953a;color:#b8953a;border-radius:5px;padding:.3rem .85rem;font-size:.75rem;cursor:pointer;transition:background .15s;white-space:nowrap;}
+.dl-btn:hover{background:rgba(184,149,58,.1)}
+.spinner{display:inline-block;width:12px;height:12px;border:2px solid #3a4a5a;border-top-color:#b8953a;border-radius:50%;animation:spin .7s linear infinite;margin-right:.4rem;vertical-align:middle;}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* ── Control image panel ── */
+.ctrl-img-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.55rem;margin:.6rem 0;}
+.ctrl-img-cell{background:#070d1a;border:1px solid #1a2535;border-radius:6px;overflow:hidden;position:relative;}
+.ctrl-img-cell canvas{display:block;width:100%;height:auto;image-rendering:pixelated;}
+.ctrl-img-cell .ci-lbl{font-family:monospace;font-size:.58rem;color:#3a4a5a;text-align:center;padding:.2rem .3rem;background:rgba(6,12,24,0.85);position:absolute;bottom:0;left:0;right:0;}
+.ctrl-mode-row{display:flex;gap:.4rem;align-items:center;margin:.5rem 0;}
+.ctrl-mode-row label{font-size:.62rem;text-transform:uppercase;letter-spacing:.09em;color:#3a4a5a;}
+.mode-chip{background:transparent;border:1px solid #1a2535;color:#3a4a5a;border-radius:4px;padding:.22rem .65rem;font-size:.68rem;font-family:monospace;cursor:pointer;transition:all .15s;}
+.mode-chip.active{border-color:#b8953a;color:#b8953a;background:rgba(184,149,58,0.08);}
+#ctrlPanel{display:none;}
+#ctrlPanel.visible{display:block;}
+</style>
+</head>
+<body>
+
+<div id="setup">
+  <h1>Voxel World Renderer</h1>
+  <div class="sub">atlas.png + world.csv → real-time 3D voxel terrain + cinematic map art</div>
+
+  <!-- Tab bar -->
+  <div class="tab-bar">
+    <button class="tab-btn active" data-tab="tab-3d">⬛ 3D World</button>
+    <button class="tab-btn" data-tab="tab-art">🎨 Map Art</button>
+  </div>
+
+  <!-- Tab: 3D World -->
+  <div class="tab-pane active" id="tab-3d">
+    <div class="panel" style="border-top-left-radius:0">
+      <h2>Input Files</h2>
+      <div class="upload-row">
+        <div class="ubox" id="aBox"><span class="ico">🗺</span><div class="lbl">Atlas PNG (biome colors)</div><div class="fn" id="aName">click to upload</div><input type="file" accept=".png,.jpg" id="aIn"></div>
+        <div class="ubox" id="cBox"><span class="ico">📊</span><div class="lbl">World CSV (elevation data)</div><div class="fn" id="cName">click to upload</div><input type="file" accept=".csv" id="cIn"></div>
+      </div>
+      <div class="ctrl-row">
+        <div class="ctrl"><label>Grid Size</label><select id="gridSz"><option value="1024" selected>1024</option></select></div>
+        <div class="ctrl"><label>Height Scale</label><input type="range" id="hscale" min="2" max="20" value="8" step="1"></div>
+        <div class="ctrl"><label>Water Level</label><input type="range" id="wlevel" min="1" max="40" value="18" step="1"></div>
+        <div class="ctrl"><label>Style</label><select id="styleS"><option value="natural">Natural</option><option value="fantasy" selected>Fantasy</option></select></div>
+        <button class="btn" id="renderBtn" disabled>▶ Build World</button>
+      </div>
+    </div>
+    <div class="prog" id="prog">
+      <div id="stgLbl" class="stg">—</div>
+      <div class="pb"><div class="pf" id="pFill"></div></div>
+    </div>
+  </div>
+
+  <!-- Tab: Map Art -->
+  <div class="tab-pane" id="tab-art">
+    <div class="panel" style="border-top-left-radius:0;width:100%">
+      <h2>Cinematic Map Art Generator</h2>
+      <p style="font-size:.68rem;color:#3a4a5a;font-family:monospace;margin-bottom:.8rem;line-height:1.6">
+        Upload your pre-rendered terrain image → img4 enhances it into cinematic map art while preserving geography exactly.
+      </p>
+
+      <!-- Rendered image upload (the painterly pre-render, NOT the flat atlas) -->
+      <div style="margin-bottom:.7rem">
+        <div class="ubox" id="renderUploadBox" style="max-width:100%;border-color:#b8953a33">
+          <span class="ico">🖼</span>
+          <div class="lbl">Upload your <b style="color:#b8953a">pre-rendered terrain image</b> (the painterly render, not the flat atlas)</div>
+          <div class="fn" id="renderUploadName">click to upload</div>
+          <input type="file" accept=".png,.jpg,.jpeg,.webp" id="renderUploadIn">
+        </div>
+      </div>
+
+      <!-- Preview of uploaded render -->
+      <div id="renderPreviewWrap" style="display:none;margin-bottom:.8rem">
+        <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:#3a4a5a;margin-bottom:.3rem">Input image (sent to img4)</div>
+        <img id="renderPreviewImg" style="max-width:100%;max-height:300px;border:1px solid #1a2535;border-radius:4px;display:block;">
+      </div>
+
+      <!-- Prompt -->
+      <label style="font-size:.62rem;text-transform:uppercase;letter-spacing:.1em;color:#3a4a5a;display:block;margin-bottom:.3rem">Prompt (editable)</label>
+      <textarea class="prompt-box" id="artPrompt">Transform this terrain render into a cinematic fantasy world map. Preserve ALL geography exactly — coastlines, landmasses, islands, rivers, lakes and biome regions must remain pixel-perfect identical. Only enhance the visual quality and style.
+
+Render each region based on its color: dark blue = deep ocean with depth gradients and subtle waves; greens = forests with dense canopy texture; yellows/browns = grasslands, savanna and desert terrain; grey = rocky mountains with jagged peaks and shadows; white = snow-capped peaks and glaciers; rivers as natural carved channels.
+
+Style: oblique top-down view, volumetric 3D terrain, golden sunlight from upper-right, atmospheric haze, AAA strategy game art, ultra detailed, 8k, no text no labels no icons.</textarea>
+
+      <div class="mapart-row">
+        <button class="btn" id="genBtn" disabled>✦ Generate with img4</button>
+        <button class="dl-btn" id="mapartRegen" style="display:none">↺ Regenerate</button>
+      </div>
+
+      <div id="mapart-status"></div>
+
+      <div class="mapart-img-wrap" id="mapartWrap">
+        <img id="mapartImg" src="" alt="Generated map art">
+      </div>
+
+      <div style="display:none;gap:.6rem;flex-wrap:wrap" id="mapartActions">
+        <button class="dl-btn" id="mapartDl">↓ Download PNG</button>
+        <button class="dl-btn" id="mapartRegenBtn">↺ Regenerate</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="viewport"><canvas id="threeCanvas"></canvas></div>
+
+<div id="hud">
+  <div class="hud-inner">
+    <div class="hud-hint">
+      <div><span>Orbit:</span> left-drag to rotate · right-drag to pan · scroll to zoom</div>
+      <div><span>Fly:</span> WASD move · mouse look · Q/E up/down · Shift to sprint</div>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end">
+      <div id="modeLbl">ORBIT MODE</div>
+      <div style="display:flex;gap:.4rem">
+        <button id="modeBtn">Switch to Fly</button>
+        <button id="backBtn">↩ Setup</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="crosshair">+</div>
+
+<script src="https://js.puter.com/v2/"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ══════════════════════════════════════════════════════
+// BIOME DATA
+// ══════════════════════════════════════════════════════
+// [R,G,B, hasTree, isWater]  — exact hex values from the biome spec
+const BIOME={
+  deep_ocean:   [0x1f,0x4e,0x73, false,true],
+  inland_lake:  [0x3f,0x88,0xc5, false,true],
+  river:        [0x2d,0x7a,0xbf, false,true],
+  beach:        [0xf1,0xdc,0xb5, false,false],
+  grassland:    [0x8f,0xcf,0x5c, false,false],
+  meadow:       [0xa8,0xd9,0x6f, false,false],
+  steppe:       [0xbf,0xa0,0x62, false,false],
+  savanna:      [0xcd,0xbb,0x55, false,false],
+  temperate_forest:[0x3f,0x8f,0x3a, true,false],
+  woodland:     [0x6e,0x9f,0x4a, true,false],
+  tropical_forest:[0x2e,0x7d,0x32, true,false],
+  rainforest:   [0x1b,0x5e,0x20, true,false],
+  sand_desert:  [0xef,0xd2,0x7a, false,false],
+  rock_desert:  [0xb6,0x8c,0x5a, false,false],
+  badlands:     [0x9e,0x5f,0x3f, false,false],
+  oasis:        [0x4c,0xaf,0x50, true,false],
+  snow_plains:  [0xf4,0xf8,0xff, false,false],
+  snow_forest:  [0xcd,0xdf,0xec, true,false],
+  snow_hills:   [0xdb,0xe3,0xef, false,false],
+  glacier:      [0xe6,0xf7,0xff, false,false],
+  grassy_hills: [0x7f,0xae,0x57, false,false],
+  forest_hills: [0x55,0x7f,0x45, true,false],
+  rocky_hills:  [0x8a,0x81,0x75, false,false],
+  rocky_mountains:[0x7a,0x7f,0x87, false,false],
+  snow_mountains:[0xf0,0xf4,0xf8, false,false],
+  forest_mountains:[0x5f,0x75,0x65, true,false],
+  alpine_meadows:[0xa9,0xc9,0x7f, false,false],
+  swamp:        [0x4f,0x65,0x30, true,false],
+  marsh:        [0x6f,0x8c,0x4a, false,false],
+  mangrove:     [0x3e,0x6f,0x57, true,false]
+};
+// Single authoritative hex→biome map (from prompt document)
+// Used by BOTH the 3D renderer (via RGB) and the art tab (via hex)
+const BIOME_HEX_MAP = {
+  '1f4e73':'deep_ocean',   '3f88c5':'inland_lake',      '2d7abf':'river',
+  'f1dcb5':'beach',
+  '8fcf5c':'grassland',    'a8d96f':'meadow',            'bfa062':'steppe',         'cdbb55':'savanna',
+  '3f8f3a':'temperate_forest','6e9f4a':'woodland',       '2e7d32':'tropical_forest','1b5e20':'rainforest',
+  'efd27a':'sand_desert',  'b68c5a':'rock_desert',       '9e5f3f':'badlands',       '4caf50':'oasis',
+  'f4f8ff':'snow_plains',  'cddfec':'snow_forest',       'dbe3ef':'snow_hills',     'e6f7ff':'glacier',
+  '7fae57':'grassy_hills', '557f45':'forest_hills',      '8a8175':'rocky_hills',
+  '7a7f87':'rocky_mountains','f0f4f8':'snow_mountains',  '5f7565':'forest_mountains','a9c97f':'alpine_meadows',
+  '4f6530':'swamp',        '6f8c4a':'marsh',             '3e6f57':'mangrove'
+};
+// Build RGB-keyed version for 3D renderer (replaces old ATLAS_MAP)
+const ATLAS_MAP = {};
+for(const [hex,name] of Object.entries(BIOME_HEX_MAP)){
+  const n=parseInt(hex,16);
+  const key=`${(n>>16)&255},${(n>>8)&255},${n&255}`;
+  ATLAS_MAP[key]=name;
+}
+// ART_COLOR_MAP is now just an alias
+const ART_COLOR_MAP = BIOME_HEX_MAP;
+// Base elevation per biome — drives how high each tile stands before CSV data blending.
+// Tuned so mountains are dramatically tall and lowlands genuinely flat.
+const BIOME_BASE_ELEV={
+  deep_ocean:0.00, inland_lake:0.03, river:0.05,
+  beach:0.07,
+  grassland:0.10, meadow:0.11, steppe:0.13, savanna:0.11,
+  temperate_forest:0.16, woodland:0.14, tropical_forest:0.18, rainforest:0.22,
+  sand_desert:0.12, rock_desert:0.16, badlands:0.24, oasis:0.09,
+  snow_plains:0.16, snow_forest:0.24, snow_hills:0.38, glacier:0.52,
+  grassy_hills:0.40, forest_hills:0.46, rocky_hills:0.52,
+  rocky_mountains:0.82, snow_mountains:1.00, forest_mountains:0.72, alpine_meadows:0.60,
+  swamp:0.06, marsh:0.08, mangrove:0.04
+};
+
+// ══════════════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════════════
+function lcg(seed){let s=seed>>>0;return()=>{s=(Math.imul(1664525,s)+1013904223)>>>0;return s/4294967296;};}
+function hashStr(s){let h=2166136261;for(let i=0;i<s.length;i++)h=Math.imul(h^s.charCodeAt(i),16777619);return h>>>0;}
+function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+function valueNoise(W,H,seed,scale){
+  const r=lcg(seed);
+  const gW=Math.ceil(W/scale)+2,gH=Math.ceil(H/scale)+2;
+  const g=new Float32Array(gW*gH);for(let i=0;i<g.length;i++)g[i]=r();
+  const o=new Float32Array(W*H);
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    const fx=x/scale,fy=y/scale,ix=Math.floor(fx),iy=Math.floor(fy);
+    const u=fx-ix,v=fy-iy,uu=u*u*(3-2*u),vv=v*v*(3-2*v);
+    const x0=Math.min(gW-1,ix),x1=Math.min(gW-1,ix+1),y0=Math.min(gH-1,iy),y1=Math.min(gH-1,iy+1);
+    o[y*W+x]=g[y0*gW+x0]*(1-uu)*(1-vv)+g[y0*gW+x1]*uu*(1-vv)+g[y1*gW+x0]*(1-uu)*vv+g[y1*gW+x1]*uu*vv;
+  }
+  return o;
+}
+function fbm(W,H,seed,baseScale,octaves=4){
+  const o=new Float32Array(W*H);let amp=1,tot=0;
+  for(let i=0;i<octaves;i++){
+    const n=valueNoise(W,H,seed+i*1337,baseScale/(1<<i));
+    for(let j=0;j<o.length;j++)o[j]+=n[j]*amp;
+    tot+=amp;amp*=0.5;
+  }
+  for(let j=0;j<o.length;j++)o[j]/=tot;
+  return o;
+}
+function setStage(l,p){document.getElementById('stgLbl').textContent=l;document.getElementById('pFill').style.width=p+'%';}
+function tick(){return new Promise(r=>setTimeout(r,8));}
+
+// ══════════════════════════════════════════════════════
+// DATA PARSING
+// ══════════════════════════════════════════════════════
+function parseCSV(txt){
+  const lines=txt.trim().split('\n');
+  const hdr=lines[0].split(',').map(h=>h.trim());
+  const rows=[];
+  for(let i=1;i<lines.length;i++){const v=lines[i].split(',');const o={};hdr.forEach((h,j)=>o[h]=v[j]?v[j].trim():'');rows.push(o);}
+  return{hdr,rows};
+}
+function buildCSVGrids(rows,N){
+  let W=0,H=0;
+  for(const r of rows){const x=+r.x,y=+r.y;if(x>W)W=x;if(y>H)H=y;}W++;H++;
+  const elev=new Float32Array(W*H);
+  const temp=new Float32Array(W*H);
+  const moist=new Float32Array(W*H);
+  const distOcean=new Float32Array(W*H);
+  const rockQty=new Float32Array(W*H);
+  const soilFert=new Float32Array(W*H);
+  const woodBio=new Float32Array(W*H);
+  const rainExp=new Float32Array(W*H);
+  const sunExp=new Float32Array(W*H);
+  const biomeRaw=new Array(W*H).fill('grassland');
+  const isLakeRaw=new Uint8Array(W*H);
+  const isRiverRaw=new Uint8Array(W*H);
+  const isMtnRaw=new Uint8Array(W*H);
+  const isHeadRaw=new Uint8Array(W*H);
+  for(const r of rows){
+    const x=+r.x,y=+r.y,i=y*W+x;
+    elev[i]=+r.elevation||0;
+    temp[i]=+r.temperature||0.5;
+    moist[i]=+r.moisture||0.5;
+    distOcean[i]=+r.dist_ocean||0;
+    rockQty[i]=+r.rock_quantity||0;
+    soilFert[i]=+r.soil_fertility||0;
+    woodBio[i]=+(r.wood_biomass_capacity||r.wood_biomass||0);
+    rainExp[i]=+r.rain_exposure||0;
+    sunExp[i]=+r.sunlight_exposure||0;
+    if(r.biome)biomeRaw[i]=r.biome;
+    if(r.is_lake==='1'||r.is_lake==='true'||r.is_lake==='True') isLakeRaw[i]=1;
+    if(r.is_river==='1'||r.is_river==='true'||r.is_river==='True') isRiverRaw[i]=1;
+    if(r.is_mountain==='1'||r.is_mountain==='true'||r.is_mountain==='True') isMtnRaw[i]=1;
+    if(r.is_headwater==='1'||r.is_headwater==='true'||r.is_headwater==='True') isHeadRaw[i]=1;
+  }
+  let mn=Infinity,mx=-Infinity;
+  for(let i=0;i<W*H;i++){if(elev[i]<mn)mn=elev[i];if(elev[i]>mx)mx=elev[i];}
+  const rng=mx-mn||1;for(let i=0;i<W*H;i++)elev[i]=(elev[i]-mn)/rng;
+  function rs(src){
+    const dst=new Float32Array(N*N);
+    for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+      const sx=Math.round(x*(W-1)/(N-1)),sy=Math.round(y*(H-1)/(N-1));
+      dst[y*N+x]=src[Math.min(W*H-1,sy*W+sx)];
+    }return dst;
+  }
+  function rsU8(src){
+    const dst=new Uint8Array(N*N);
+    for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+      const sx=Math.round(x*(W-1)/(N-1)),sy=Math.round(y*(H-1)/(N-1));
+      dst[y*N+x]=src[Math.min(W*H-1,sy*W+sx)];
+    }return dst;
+  }
+  function rsBiome(){
+    const dst=new Array(N*N);
+    for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+      const sx=Math.round(x*(W-1)/(N-1)),sy=Math.round(y*(H-1)/(N-1));
+      dst[y*N+x]=biomeRaw[sy*W+sx]||'grassland';
+    }return dst;
+  }
+  // Compute world-level aggregate stats for prompt enrichment
+  let sumTemp=0,sumMoist=0,sumRain=0,sumSun=0,sumSoil=0,sumRock=0,sumWood=0,n=W*H;
+  let maxDistOcean=0,mtnCount=0,riverCount=0,headCount=0,lakeCount=0;
+  for(let i=0;i<n;i++){
+    sumTemp+=temp[i];sumMoist+=moist[i];sumRain+=rainExp[i];sumSun+=sunExp[i];
+    sumSoil+=soilFert[i];sumRock+=rockQty[i];sumWood+=woodBio[i];
+    if(distOcean[i]>maxDistOcean)maxDistOcean=distOcean[i];
+    if(isMtnRaw[i])mtnCount++;if(isRiverRaw[i])riverCount++;
+    if(isHeadRaw[i])headCount++;if(isLakeRaw[i])lakeCount++;
+  }
+  const stats={
+    avgTemp:sumTemp/n, avgMoist:sumMoist/n, avgRain:sumRain/n, avgSun:sumSun/n,
+    avgSoil:sumSoil/n, avgRock:sumRock/n, avgWood:sumWood/n,
+    maxDistOcean, mtnFrac:mtnCount/n, riverFrac:riverCount/n,
+    headCount, lakeCount
+  };
+  return{
+    N,elev:rs(elev),wood:rs(woodBio),biome:rsBiome(),
+    isLake:rsU8(isLakeRaw),isRiver:rsU8(isRiverRaw),
+    isMtn:rsU8(isMtnRaw),isHead:rsU8(isHeadRaw),
+    temp:rs(temp),moist:rs(moist),distOcean:rs(distOcean),
+    rockQty:rs(rockQty),soilFert:rs(soilFert),rainExp:rs(rainExp),sunExp:rs(sunExp),
+    stats
+  };
+}
+function decodeAtlas(img,N){
+  const c=document.createElement('canvas');c.width=N;c.height=N;
+  const ctx=c.getContext('2d');ctx.drawImage(img,0,0,N,N);
+  const px=ctx.getImageData(0,0,N,N).data;
+  const keys=Object.entries(ATLAS_MAP).map(([k,v])=>{const p=k.split(',');return[+p[0],+p[1],+p[2],v];});
+  const out=new Array(N*N);
+  for(let i=0;i<N*N;i++){
+    const r=px[i*4],gg=px[i*4+1],b=px[i*4+2];
+    let best='grassland',bd=1e9;
+    for(const[kr,kg,kb,name]of keys){const d=(r-kr)**2+(gg-kg)**2+(b-kb)**2;if(d<bd){bd=d;best=name;}}
+    out[i]=bd<3600?best:'grassland';
+  }
+  return out;
+}
+
+// ══════════════════════════════════════════════════════
+// FILE INPUTS
+// ══════════════════════════════════════════════════════
+let atlasImg=null,csvText=null;
+document.getElementById('aIn').addEventListener('change',e=>{
+  const f=e.target.files[0];if(!f)return;
+  document.getElementById('aName').textContent=f.name;
+  document.getElementById('aBox').classList.add('ok');
+  const img=new Image();img.onload=()=>{atlasImg=img;checkReady();};img.src=URL.createObjectURL(f);
+});
+document.getElementById('cIn').addEventListener('change',e=>{
+  const f=e.target.files[0];if(!f)return;
+  document.getElementById('cName').textContent=f.name;
+  document.getElementById('cBox').classList.add('ok');
+  f.text().then(t=>{csvText=t;checkReady();});
+});
+function checkReady(){document.getElementById('renderBtn').disabled=!(atlasImg&&csvText);}
+document.getElementById('renderBtn').addEventListener('click',startBuild);
+document.getElementById('backBtn').addEventListener('click',()=>{
+  document.getElementById('viewport').style.display='none';
+  document.getElementById('hud').style.display='none';
+  document.getElementById('setup').style.display='flex';
+  exitFly();
+});
+
+// ══════════════════════════════════════════════════════
+// THREE.JS GLOBALS
+// ══════════════════════════════════════════════════════
+let renderer,scene,camera,animId;
+let csvGridGlobal=null; // stored after build for art tab access
+
+// ══════════════════════════════════════════════════════
+// BUILD WORLD
+// ══════════════════════════════════════════════════════
+async function startBuild(){
+  document.getElementById('renderBtn').disabled=true;
+  document.getElementById('prog').style.display='block';
+
+  const N=+document.getElementById('gridSz').value;
+  const hscaleUI=+document.getElementById('hscale').value;
+  const style=document.getElementById('styleS').value;
+  const satMul=style==='fantasy'?1.25:1.0;
+
+  setStage('Parsing CSV…',4);await tick();
+  const csv=parseCSV(csvText);
+
+  setStage('Building grids…',12);await tick();
+  const g=buildCSVGrids(csv.rows,N);
+  csvGridGlobal=g; // make available to art tab prompt builder
+
+  setStage('Decoding atlas…',20);await tick();
+  const atlasBiome=decodeAtlas(atlasImg,N);
+  const biome=new Array(N*N);
+  for(let i=0;i<N*N;i++) biome[i]=atlasBiome[i]||g.biome[i]||'grassland';
+
+  setStage('Generating terrain…',30);await tick();
+  const seed=hashStr(csvText.slice(0,400));
+  const fbmH=fbm(N,N,seed,N/0.6,3);
+
+  const maxVox=Math.round(hscaleUI*10);
+  const heightVox=new Int32Array(N*N);
+
+  const WATER_BIOMES=new Set(['deep_ocean','inland_lake','river']);
+  const isOceanCell=new Uint8Array(N*N); // true ocean only — no terrain underneath
+  const isWaterCell=new Uint8Array(N*N); // ocean + lake + river (for coast taper / depth map)
+  const isLakeCell=new Uint8Array(N*N);
+  const isRiverCell=new Uint8Array(N*N);
+  // DIRS4 declared here so all code below can use it
+  const DIRS4=[[-1,0],[1,0],[0,-1],[0,1]];
+
+  for(let i=0;i<N*N;i++){
+    const bname=biome[i];
+    const def=BIOME[bname]||BIOME.grassland;
+    const isOcean=def[4]||WATER_BIOMES.has(bname);
+    const lakeFlag=g.isLake[i]===1;
+    const riverFlag=g.isRiver[i]===1;
+    if(lakeFlag||(isOcean&&!riverFlag)) isLakeCell[i]=1;
+    if(riverFlag) isRiverCell[i]=1;
+    // Ocean tiles (true sea) have no terrain — rivers/lakes DO have terrain
+    if(isOcean && !lakeFlag && !riverFlag) isOceanCell[i]=1;
+    if(isOcean||lakeFlag||riverFlag) isWaterCell[i]=1;
+  }
+
+  // ── Smoothed base elevation — fast separable box blur O(N²) not O(N²·R²) ──
+  // Two-pass 1D box filter: horizontal then vertical. Same result as 2D box
+  // blur but only 2×N² operations regardless of radius.
+  setStage('Smoothing biome elevations…',32);await tick();
+  const baseElevGrid=new Float32Array(N*N);
+  for(let i=0;i<N*N;i++) baseElevGrid[i]=BIOME_BASE_ELEV[biome[i]]??0.15;
+
+  const smoothedBE=new Float32Array(N*N);
+  const R=8;
+  // Horizontal pass → tmp
+  const tmp=new Float32Array(N*N);
+  for(let iz=0;iz<N;iz++){
+    // Build prefix sum for this row
+    let sum=0;
+    // Sliding window
+    for(let ix=0;ix<N;ix++){
+      sum+=baseElevGrid[iz*N+ix];
+      if(ix>=2*R) sum-=baseElevGrid[iz*N+(ix-2*R)];
+      const lo=Math.max(0,ix-R), hi=Math.min(N-1,ix+R);
+      tmp[iz*N+ix]=sum/(hi-lo+1);
+    }
+  }
+  await tick();
+  // Vertical pass: tmp → smoothedBE
+  for(let ix=0;ix<N;ix++){
+    let sum=0;
+    for(let iz=0;iz<N;iz++){
+      sum+=tmp[iz*N+ix];
+      if(iz>=2*R) sum-=tmp[(iz-2*R)*N+ix];
+      const lo=Math.max(0,iz-R), hi=Math.min(N-1,iz+R);
+      smoothedBE[iz*N+ix]=sum/(hi-lo+1);
+    }
+  }
+  await tick();
+
+  // ── Land heights (includes river/lake tiles — they need terrain underneath) ─
+  for(let i=0;i<N*N;i++){
+    if(isOceanCell[i]){heightVox[i]=1;continue;} // only true ocean is flat at bottom
+    const be=smoothedBE[i];
+    const csvE=g.elev[i];
+    const mountainy=clamp((be-0.4)/0.6,0,1);
+    const csvW=0.55+0.35*mountainy;
+    const h=clamp(csvE*csvW + be*(1-csvW) + fbmH[i]*0.06*(1-mountainy*0.5),0.01,1.0);
+    heightVox[i]=Math.max(1,Math.round(h*maxVox));
+  }
+
+  // ── Coastal taper: HARD clamp at ocean boundary, smooth ramp inland ────────
+  // The ocean plane sits at a fixed SEA_LEVEL vox. Any land tile above that
+  // level directly touching ocean is a visible wall. The only real fix is:
+  //   dist=1 from ocean → force heightVox to exactly SEA_LEVEL (no wall)
+  //   dist=2            → gentle step up (≤ SEA_LEVEL * 1.8)
+  //   dist=3            → ≤ SEA_LEVEL * 2.8
+  //   dist=4            → ≤ SEA_LEVEL * 4.0
+  //   dist≥5            → uncapped, normal terrain
+  // This creates a natural beach/tidal-flat look at every coastline.
+  const SEA_LEVEL=4; // ocean surface renders at this vox height
+  {
+    // BFS from OCEAN tiles only (not rivers/lakes — those are terrain)
+    const distW=new Int16Array(N*N).fill(-1);
+    const q=new Int32Array(N*N); let qh=0,qt=0;
+    for(let i=0;i<N*N;i++) if(isOceanCell[i]){distW[i]=0;q[qt++]=i;}
+    while(qh<qt){
+      const ci=q[qh++]; const cx=ci%N,cz=(ci/N)|0;
+      const nd=distW[ci]+1; if(nd>5) continue;
+      for(const[dx,dz] of DIRS4){
+        const nx=cx+dx,nz=cz+dz;
+        if(nx<0||nx>=N||nz<0||nz>=N) continue;
+        const ni=nz*N+nx;
+        if(distW[ni]!==-1) continue;
+        distW[ni]=nd; q[qt++]=ni;
+      }
+    }
+    // Hard per-distance ceiling — no tile at dist=1 from ocean taller than SEA_LEVEL
+    const ceilings=[0, SEA_LEVEL, Math.round(SEA_LEVEL*1.8), Math.round(SEA_LEVEL*2.8), Math.round(SEA_LEVEL*4.0)];
+    for(let i=0;i<N*N;i++){
+      if(isOceanCell[i]) continue;
+      const d=distW[i];
+      if(d<1||d>4) continue;
+      const ceil=ceilings[d];
+      if(heightVox[i]>ceil) heightVox[i]=ceil;
+    }
+  }
+
+  // ── Submarine shelf: BFS from land, fade ocean floor height to shore ───────
+  const shoreDepth=new Int32Array(N*N);
+  {
+    const SHELF=8;
+    const nearH=new Int32Array(N*N);
+    const nearD=new Int16Array(N*N).fill(-1);
+    const q2=new Int32Array(N*N); let h2=0,t2=0;
+    // Seed from non-ocean tiles (land + rivers + lakes all have real terrain height)
+    for(let i=0;i<N*N;i++) if(!isOceanCell[i]){nearH[i]=heightVox[i];nearD[i]=0;q2[t2++]=i;}
+    while(h2<t2){
+      const ci=q2[h2++]; const cx=ci%N,cz=(ci/N)|0;
+      const cd=nearD[ci]; if(cd>=SHELF) continue;
+      for(const[dx,dz] of DIRS4){
+        const nx=cx+dx,nz=cz+dz;
+        if(nx<0||nx>=N||nz<0||nz>=N) continue;
+        const ni=nz*N+nx;
+        if(nearD[ni]!==-1) continue;
+        nearD[ni]=cd+1; nearH[ni]=nearH[ci]; q2[t2++]=ni;
+      }
+    }
+    for(let i=0;i<N*N;i++){
+      if(!isOceanCell[i]) continue; // only ocean tiles get shelf geometry
+      const d=nearD[i]; if(d<=0||d>SHELF) continue;
+      const lH=Math.max(SEA_LEVEL,nearH[i]);
+      const t=clamp(1-(d-1)/(SHELF-1),0,1), tS=t*t*(3-2*t);
+      shoreDepth[i]=Math.max(1,Math.round(SEA_LEVEL*0.5+tS*(lH*0.35)));
+    }
+  }
+
+  // ── Lake levels: BFS per lake region ─────────────────────────────────────
+  // ── Lake surface levels: each lake region's surface = its own terrain height
+  // Lakes now have terrain underneath. The lake surface is simply the terrain
+  // at each lake tile — no BFS needed. lakeLevel[i] = heightVox[i] for lake tiles.
+  const lakeLevel=new Float32Array(N*N).fill(-1);
+  for(let i=0;i<N*N;i++){
+    if(isLakeCell[i]) lakeLevel[i]=heightVox[i];
+  }
+
+  // ── River surface heights: rivers flow ON the terrain, not in a hole ────────
+  // riverHeight[i] = the terrain heightVox at that tile.
+  // We then do a downhill pass so water always flows to lower terrain,
+  // and clamp so a river tile never sits above its adjacent land.
+  const riverHeight=new Float32Array(N*N).fill(-1);
+  for(let i=0;i<N*N;i++){
+    if(isRiverCell[i]) riverHeight[i]=heightVox[i]; // start from real terrain height
+  }
+  // Downhill relaxation: each river tile takes min of itself and lower river neighbors
+  for(let pass=0;pass<6;pass++){
+    for(let iz=0;iz<N;iz++) for(let ix=0;ix<N;ix++){
+      const i=iz*N+ix; if(riverHeight[i]<0) continue;
+      for(const[dx,dz] of DIRS4){
+        const nx=ix+dx,nz=iz+dz;
+        if(nx<0||nx>=N||nz<0||nz>=N) continue;
+        const ni=nz*N+nx;
+        // Only propagate downhill through other river cells
+        if(riverHeight[ni]>=0 && riverHeight[ni]<riverHeight[i])
+          riverHeight[i]=riverHeight[ni];
+      }
+    }
+  }
+  // Clamp: river surface never above adjacent non-river land
+  for(let iz=0;iz<N;iz++) for(let ix=0;ix<N;ix++){
+    const i=iz*N+ix; if(riverHeight[i]<0) continue;
+    let minL=heightVox[i]; // start with own terrain
+    for(const[dx,dz] of DIRS4){
+      const nx=ix+dx,nz=iz+dz;
+      if(nx<0||nx>=N||nz<0||nz>=N) continue;
+      const ni=nz*N+nx;
+      if(!isRiverCell[ni]&&!isOceanCell[ni]) minL=Math.min(minL,heightVox[ni]);
+    }
+    riverHeight[i]=Math.min(riverHeight[i],minL);
+  }
+
+  // ── Water depth gradient for ocean color tiers ────────────────────────────
+  const waterDepth=new Float32Array(N*N);
+  {
+    const q=new Int32Array(N*N); let qh=0,qt=0;
+    const vis=new Uint8Array(N*N);
+    const dist=new Float32Array(N*N);
+    let maxD=1;
+    // Seed from non-ocean tiles (land + rivers + lakes)
+    for(let i=0;i<N*N;i++) if(!isOceanCell[i]){vis[i]=1;q[qt++]=i;}
+    while(qh<qt){
+      const ci=q[qh++]; const cx=ci%N,cz=(ci/N)|0;
+      for(const[dx,dz] of DIRS4){
+        const nx=cx+dx,nz=cz+dz;
+        if(nx<0||nx>=N||nz<0||nz>=N) continue;
+        const ni=nz*N+nx;
+        if(vis[ni]) continue; vis[ni]=1;
+        dist[ni]=dist[ci]+1;
+        if(dist[ni]>maxD) maxD=dist[ni];
+        q[qt++]=ni;
+      }
+    }
+    const inv=1/maxD;
+    for(let i=0;i<N*N;i++) waterDepth[i]=clamp(dist[i]*inv,0,1);
+  }
+
+  setStage('Initialising WebGL…',40);await tick();
+
+  // Clean up old renderer
+  if(renderer){cancelAnimationFrame(animId);renderer.dispose();}
+
+  const canvas=document.getElementById('threeCanvas');
+  renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  renderer.setSize(window.innerWidth,window.innerHeight);
+  renderer.setClearColor(0x87ceeb);
+  renderer.sortObjects=true;
+
+  scene=new THREE.Scene();
+  camera=new THREE.PerspectiveCamera(70,window.innerWidth/window.innerHeight,1,1000000);
+
+  // Lighting — warm sun + cool fill + subtle blue ambient
+  const ambLight=new THREE.AmbientLight(0xd4e8f8,0.55);
+  scene.add(ambLight);
+  const sun=new THREE.DirectionalLight(0xfff5e0,1.1);
+  sun.position.set(0.65,1.0,0.45).normalize();
+  scene.add(sun);
+  const fill=new THREE.DirectionalLight(0xc8d8f0,0.28);
+  fill.position.set(-1,-0.3,-0.5).normalize();
+  scene.add(fill);
+
+  // Sky
+  const skyMat=new THREE.MeshBasicMaterial({color:0x87ceeb,side:THREE.BackSide});
+  scene.add(new THREE.Mesh(new THREE.SphereGeometry(900000,8,6),skyMat));
+
+  // ── Build land voxels ──────────────────────────────────────────────────────
+  setStage('Counting instances…',45);await tick();
+  const biomeCounts={};
+  for(let i=0;i<N*N;i++){
+    if(isOceanCell[i]) continue; // only exclude true ocean from terrain voxels
+    const b=biome[i];
+    biomeCounts[b]=(biomeCounts[b]||0)+1;
+  }
+
+  const BOX=new THREE.BoxGeometry(1,1,1);
+  const meshMap={};
+  const cursorMap={};
+  const dummy=new THREE.Object3D();
+  const half=N*0.5;
+
+  for(const[bname,count] of Object.entries(biomeCounts)){
+    if(!count) continue;
+    const def=BIOME[bname]||BIOME.grassland;
+    let [r,gv,b]=def;
+    if(satMul!==1.0){const gr=(r+gv+b)/3;r=clamp(gr+(r-gr)*satMul,0,255);gv=clamp(gr+(gv-gr)*satMul,0,255);b=clamp(gr+(b-gr)*satMul,0,255);}
+    const col=new THREE.Color(r/255,gv/255,b/255);
+    const mat=new THREE.MeshLambertMaterial({color:col});
+    const mesh=new THREE.InstancedMesh(BOX,mat,count);
+    mesh.frustumCulled=false;
+    scene.add(mesh);
+    meshMap[bname]=mesh;
+    cursorMap[bname]=0;
+  }
+
+  setStage('Placing voxels…',50);await tick();
+  const scaleXZ=1000, scaleY=600;
+  for(let iz=0;iz<N;iz++){
+    for(let ix=0;ix<N;ix++){
+      const idx=iz*N+ix;
+      if(isOceanCell[idx]) continue; // only skip true ocean — rivers/lakes have terrain
+      const bname=biome[idx];
+      const hv=heightVox[idx]*scaleY;
+      const mesh=meshMap[bname];
+      if(!mesh) continue;
+      let cur=cursorMap[bname];
+      dummy.position.set((ix-half)*2*scaleXZ, hv*0.5*1.05, (iz-half)*2*scaleXZ);
+      dummy.scale.set(2*scaleXZ, hv*1.05, 2*scaleXZ);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(cur,dummy.matrix);
+      cursorMap[bname]=cur+1;
+    }
+    if(iz%128===0){
+      setStage(`Placing voxels… ${Math.round(iz/N*100)}%`,50+Math.round(iz/N*28));
+      await tick();
+    }
+  }
+  for(const[bname,mesh] of Object.entries(meshMap)){
+    mesh.count=cursorMap[bname];
+    mesh.instanceMatrix.needsUpdate=true;
+  }
+
+  // ── OCEAN: per-depth-tier instanced planes ────────────────────────────────
+  // 3 depth tiers: shore, mid-ocean, deep ocean — each gets its own colour/opacity
+  setStage('Building water surfaces…',80);await tick();
+
+  // ── SUBMARINE SHELF: solid ocean-floor blocks sloping from coast ─────────
+  let shelfCount=0;
+  for(let i=0;i<N*N;i++) if(shoreDepth[i]>0) shelfCount++;
+  if(shelfCount>0){
+    const shelfMat=new THREE.MeshLambertMaterial({color:0x1a3a5c});
+    const shelfMesh=new THREE.InstancedMesh(BOX,shelfMat,shelfCount);
+    shelfMesh.frustumCulled=false;
+    scene.add(shelfMesh);
+    let sc=0;
+    for(let iz=0;iz<N;iz++) for(let ix=0;ix<N;ix++){
+      const i=iz*N+ix;
+      if(!shoreDepth[i]) continue;
+      const sh=shoreDepth[i]*scaleY;
+      dummy.position.set((ix-half)*2*scaleXZ, sh*0.5, (iz-half)*2*scaleXZ);
+      dummy.scale.set(2.02*scaleXZ, sh, 2.02*scaleXZ);
+      dummy.rotation.set(0,0,0);
+      dummy.updateMatrix();
+      shelfMesh.setMatrixAt(sc++,dummy.matrix);
+    }
+    shelfMesh.count=sc;
+    shelfMesh.instanceMatrix.needsUpdate=true;
+  }
+
+  // ── OCEAN surface planes at SEA_LEVEL ────────────────────────────────────
+  const oceanMat0=new THREE.MeshLambertMaterial({color:0x2d6fb0,transparent:true,opacity:0.82,side:THREE.DoubleSide,depthWrite:false});
+  const oceanMat1=new THREE.MeshLambertMaterial({color:0x1f5a95,transparent:true,opacity:0.90,side:THREE.DoubleSide,depthWrite:false});
+  const oceanMat2=new THREE.MeshLambertMaterial({color:0x1f4e73,transparent:true,opacity:0.96,side:THREE.DoubleSide,depthWrite:false});
+
+  let oc0=0,oc1=0,oc2=0;
+  for(let i=0;i<N*N;i++){
+    if(!isOceanCell[i]) continue;
+    const d=waterDepth[i];
+    if(d<0.25) oc0++; else if(d<0.6) oc1++; else oc2++;
+  }
+  const OPLANE=new THREE.PlaneGeometry(1,1); OPLANE.rotateX(-Math.PI/2);
+  const oceanMeshes=[
+    new THREE.InstancedMesh(OPLANE,oceanMat0,Math.max(1,oc0)),
+    new THREE.InstancedMesh(OPLANE,oceanMat1,Math.max(1,oc1)),
+    new THREE.InstancedMesh(OPLANE,oceanMat2,Math.max(1,oc2)),
+  ];
+  for(const m of oceanMeshes){m.frustumCulled=false;scene.add(m);}
+  const oCur=[0,0,0];
+  const oceanSurfaceY=SEA_LEVEL*scaleY*1.05;
+  for(let iz=0;iz<N;iz++) for(let ix=0;ix<N;ix++){
+    const i=iz*N+ix;
+    if(!isOceanCell[i]) continue;
+    const d=waterDepth[i];
+    const tier=d<0.25?0:d<0.6?1:2;
+    dummy.position.set((ix-half)*2*scaleXZ, oceanSurfaceY, (iz-half)*2*scaleXZ);
+    dummy.scale.set(2.06*scaleXZ,1,2.06*scaleXZ);
+    dummy.rotation.set(0,0,0);
+    dummy.updateMatrix();
+    oceanMeshes[tier].setMatrixAt(oCur[tier]++,dummy.matrix);
+  }
+  for(let t=0;t<3;t++){oceanMeshes[t].count=oCur[t];oceanMeshes[t].instanceMatrix.needsUpdate=true;}
+
+  // ── LAKES: calm surface plane sitting ON TOP of terrain ───────────────────
+  const lakeMat=new THREE.MeshLambertMaterial({
+    color:0x3f88c5, transparent:true, opacity:0.88,
+    side:THREE.DoubleSide, depthWrite:false
+  });
+  let lakeCellCount=0;
+  for(let i=0;i<N*N;i++) if(lakeLevel[i]>=0) lakeCellCount++;
+  if(lakeCellCount>0){
+    const LPLANE=new THREE.PlaneGeometry(1,1); LPLANE.rotateX(-Math.PI/2);
+    const lakeMesh=new THREE.InstancedMesh(LPLANE,lakeMat,lakeCellCount);
+    lakeMesh.frustumCulled=false; scene.add(lakeMesh);
+    let lc=0;
+    for(let iz=0;iz<N;iz++) for(let ix=0;ix<N;ix++){
+      const i=iz*N+ix;
+      if(lakeLevel[i]<0) continue;
+      // Surface sits just above the top of the terrain block
+      const terrainTopY = lakeLevel[i]*scaleY*1.05 + scaleY*0.55;
+      dummy.position.set((ix-half)*2*scaleXZ, terrainTopY, (iz-half)*2*scaleXZ);
+      dummy.scale.set(2.04*scaleXZ,1,2.04*scaleXZ);
+      dummy.rotation.set(0,0,0);
+      dummy.updateMatrix();
+      lakeMesh.setMatrixAt(lc++,dummy.matrix);
+    }
+    lakeMesh.count=lc; lakeMesh.instanceMatrix.needsUpdate=true;
+  }
+
+  // ── RIVERS: flowing surface plane ON TOP of terrain, stepping downhill ────
+  const riverMat=new THREE.MeshLambertMaterial({
+    color:0x2d7abf, transparent:true, opacity:0.90,
+    side:THREE.DoubleSide, depthWrite:false
+  });
+  let riverCellCount=0;
+  for(let i=0;i<N*N;i++) if(riverHeight[i]>=0) riverCellCount++;
+  if(riverCellCount>0){
+    const RPLANE=new THREE.PlaneGeometry(1,1); RPLANE.rotateX(-Math.PI/2);
+    const riverMesh=new THREE.InstancedMesh(RPLANE,riverMat,riverCellCount);
+    riverMesh.frustumCulled=false; scene.add(riverMesh);
+    let rc=0;
+    for(let iz=0;iz<N;iz++) for(let ix=0;ix<N;ix++){
+      const i=iz*N+ix;
+      if(riverHeight[i]<0) continue;
+      // River surface sits on top of terrain block + tiny offset to avoid z-fighting
+      const terrainTopY = riverHeight[i]*scaleY*1.05 + scaleY*0.55;
+      dummy.position.set((ix-half)*2*scaleXZ, terrainTopY, (iz-half)*2*scaleXZ);
+      dummy.scale.set(2.06*scaleXZ,1,2.06*scaleXZ);
+      dummy.rotation.set(0,0,0);
+      dummy.updateMatrix();
+      riverMesh.setMatrixAt(rc++,dummy.matrix);
+    }
+    riverMesh.count=rc; riverMesh.instanceMatrix.needsUpdate=true;
+  }
+
+  setStage('Done ✓',100);await tick();
+
+  // Camera: high overview, slightly angled
+  camera.position.set(0, maxVox*scaleY*16, N*scaleXZ*3.2);
+  camera.lookAt(0, maxVox*0.3*scaleY, 0);
+
+  // Show
+  document.getElementById('prog').style.display='none';
+  document.getElementById('setup').style.display='none';
+  document.getElementById('viewport').style.display='block';
+  document.getElementById('hud').style.display='block';
+  document.getElementById('renderBtn').disabled=false;
+
+  initOrbit(N,maxVox);
+  startLoop();
+
+  window.addEventListener('resize',onResize);
+}
+
+function onResize(){
+  if(!renderer) return;
+  camera.aspect=window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth,window.innerHeight);
+}
+
+// ══════════════════════════════════════════════════════
+// RENDER LOOP
+// ══════════════════════════════════════════════════════
+let flyMode=false;
+
+function startLoop(){
+  cancelAnimationFrame(animId);
+  let last=performance.now();
+  function loop(now){
+    animId=requestAnimationFrame(loop);
+    const dt=Math.min((now-last)/1000,0.1);
+    last=now;
+    if(flyMode) tickFly(dt);
+    renderer.render(scene,camera);
+  }
+  loop(performance.now());
+}
+
+// ══════════════════════════════════════════════════════
+// ORBIT CONTROLLER
+// ══════════════════════════════════════════════════════
+let oTarget=new THREE.Vector3();
+let oRadius=500,oTheta=Math.PI*0.3,oPhi=Math.PI*0.28;
+let oDrag=false,oPan=false,oLastX=0,oLastY=0,oPanX=0,oPanY=0;
+
+function initOrbit(N,maxVox){
+  const scaleY=600,scaleXZ=1000;
+  oTarget.set(0,maxVox*scaleY*0.3,0);
+  oRadius=N*scaleXZ*2.2;
+  oTheta=Math.PI*0.25;
+  oPhi=Math.PI*0.28;
+  syncOrbit();
+}
+function syncOrbit(){
+  oPhi=clamp(oPhi,0.04,Math.PI*0.48);
+  camera.position.set(
+    oTarget.x+oRadius*Math.sin(oPhi)*Math.sin(oTheta),
+    oTarget.y+oRadius*Math.cos(oPhi),
+    oTarget.z+oRadius*Math.sin(oPhi)*Math.cos(oTheta)
+  );
+  camera.lookAt(oTarget);
+}
+
+const cvs=document.getElementById('threeCanvas');
+cvs.addEventListener('contextmenu',e=>e.preventDefault());
+cvs.addEventListener('mousedown',e=>{
+  if(flyMode) return;
+  if(e.button===0){oDrag=true;oLastX=e.clientX;oLastY=e.clientY;}
+  if(e.button===2){oPan=true;oPanX=e.clientX;oPanY=e.clientY;}
+});
+window.addEventListener('mousemove',e=>{
+  if(flyMode) return;
+  if(oDrag){
+    oTheta-=(e.clientX-oLastX)*0.006;
+    oPhi  -=(e.clientY-oLastY)*0.006;
+    oLastX=e.clientX;oLastY=e.clientY;
+    syncOrbit();
+  }
+  if(oPan){
+    const spd=oRadius*0.0012;
+    const right=new THREE.Vector3();
+    right.crossVectors(new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion),new THREE.Vector3(0,1,0)).normalize();
+    // pan in world XZ + Y
+    const fwd=new THREE.Vector3();
+    camera.getWorldDirection(fwd);fwd.y=0;fwd.normalize();
+    oTarget.addScaledVector(right,-(e.clientX-oPanX)*spd);
+    oTarget.y+=(e.clientY-oPanY)*spd;
+    oPanX=e.clientX;oPanY=e.clientY;
+    syncOrbit();
+  }
+});
+window.addEventListener('mouseup',e=>{
+  if(e.button===0)oDrag=false;
+  if(e.button===2)oPan=false;
+});
+cvs.addEventListener('wheel',e=>{
+  if(flyMode) return;
+  e.preventDefault();
+  oRadius*=1+e.deltaY*0.001;
+  oRadius=clamp(oRadius,5,6000);
+  syncOrbit();
+},{passive:false});
+
+// ══════════════════════════════════════════════════════
+// FLY CONTROLLER
+// ══════════════════════════════════════════════════════
+const keys={};
+let flyYaw=0,flyPitch=0,flyBaseSpeed=800; // 10x speed increase
+
+document.addEventListener('keydown',e=>{keys[e.code]=true;});
+document.addEventListener('keyup',  e=>{keys[e.code]=false;});
+
+document.getElementById('modeBtn').addEventListener('click',toggleMode);
+function toggleMode(){flyMode?exitFly():enterFly();}
+
+function enterFly(){
+  flyMode=true;
+  const d=new THREE.Vector3();
+  camera.getWorldDirection(d);
+  flyYaw=Math.atan2(d.x,d.z);
+  flyPitch=Math.asin(clamp(d.y,-1,1));
+  document.getElementById('modeBtn').textContent='Switch to Orbit';
+  document.getElementById('modeLbl').textContent='FLY MODE';
+  document.getElementById('crosshair').style.display='block';
+  cvs.requestPointerLock();
+}
+function exitFly(){
+  flyMode=false;
+  document.getElementById('modeBtn').textContent='Switch to Fly';
+  document.getElementById('modeLbl').textContent='ORBIT MODE';
+  document.getElementById('crosshair').style.display='none';
+  if(document.pointerLockElement===cvs) document.exitPointerLock();
+  // Re-sync orbit around current position
+  const d=new THREE.Vector3().subVectors(camera.position,oTarget);
+  oRadius=d.length();
+  if(oRadius<1)oRadius=1;
+  oPhi=Math.acos(clamp(d.y/oRadius,-1,1));
+  oTheta=Math.atan2(d.x,d.z);
+}
+
+document.addEventListener('pointerlockchange',()=>{
+  if(document.pointerLockElement!==cvs && flyMode) exitFly();
+});
+cvs.addEventListener('click',()=>{
+  if(flyMode && document.pointerLockElement!==cvs) cvs.requestPointerLock();
+});
+document.addEventListener('mousemove',e=>{
+  if(!flyMode||document.pointerLockElement!==cvs) return;
+  flyYaw  -=e.movementX*0.002;
+  flyPitch =clamp(flyPitch-e.movementY*0.002,-Math.PI*0.48,Math.PI*0.48);
+});
+
+function tickFly(dt){
+  const spd=flyBaseSpeed*(keys['ShiftLeft']||keys['ShiftRight']?10:1)*dt; // 10x sprint multiplier
+  const fwd=new THREE.Vector3(
+    Math.sin(flyYaw)*Math.cos(flyPitch),
+    Math.sin(flyPitch),
+    Math.cos(flyYaw)*Math.cos(flyPitch)
+  );
+  const right=new THREE.Vector3(Math.cos(flyYaw),0,-Math.sin(flyYaw));
+  if(keys['KeyW']||keys['ArrowUp'])    camera.position.addScaledVector(fwd,spd);
+  if(keys['KeyS']||keys['ArrowDown'])  camera.position.addScaledVector(fwd,-spd);
+  if(keys['KeyA']||keys['ArrowLeft'])  camera.position.addScaledVector(right,-spd);
+  if(keys['KeyD']||keys['ArrowRight']) camera.position.addScaledVector(right,spd);
+  if(keys['KeyE']||keys['Space'])      camera.position.y+=spd;
+  if(keys['KeyQ']||keys['ControlLeft'])camera.position.y-=spd;
+  camera.rotation.order='YXZ';
+  camera.rotation.y=flyYaw;
+  camera.rotation.x=flyPitch;
+}
+
+// ══════════════════════════════════════════════════════
+// TAB SWITCHING
+// ══════════════════════════════════════════════════════
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.tab).classList.add('active');
+  });
+});
+
+// ══════════════════════════════════════════════════════
+// MAP ART — GHOSTBOT img4 (img2img on pre-rendered terrain)
+// ══════════════════════════════════════════════════════
+
+// ▼▼▼ PASTE YOUR API KEY HERE ▼▼▼
+const GHOSTBOT_API_KEY = 'infip-83807b60';
+// ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
+let renderImg = null;     // the user's pre-rendered terrain image
+let renderDataURL = null; // cached data URL
+
+// ── Rendered image upload ──────────────────────────────
+document.getElementById('renderUploadIn').addEventListener('change', e=>{
+  const f = e.target.files[0]; if(!f) return;
+  const reader = new FileReader();
+  reader.onload = ev=>{
+    renderDataURL = ev.target.result;
+    renderImg = new Image();
+    renderImg.onload = ()=>{
+      document.getElementById('renderUploadName').textContent = f.name;
+      document.getElementById('renderUploadBox').classList.add('ok');
+      // Show preview
+      const prev = document.getElementById('renderPreviewImg');
+      prev.src = renderDataURL;
+      document.getElementById('renderPreviewWrap').style.display = 'block';
+      document.getElementById('genBtn').disabled = false;
+    };
+    renderImg.src = renderDataURL;
+  };
+  reader.readAsDataURL(f);
+});
+
+// ── Status helper ──────────────────────────────────────
+function setArtStatus(msg, cls=''){
+  const el = document.getElementById('mapart-status');
+  el.innerHTML = msg;
+  el.className = cls ? `mapart-status ${cls}` : 'mapart-status';
+}
+
+// ── GENERATE ───────────────────────────────────────────
+async function generateMapArt(){
+  const apiKey = GHOSTBOT_API_KEY;
+  if(!apiKey || apiKey === 'YOUR_API_KEY_HERE'){
+    setArtStatus('✗ Paste your API key into GHOSTBOT_API_KEY in the code','err'); return;
+  }
+  if(!renderDataURL){
+    setArtStatus('✗ Upload your pre-rendered terrain image first','err'); return;
+  }
+
+  const prompt = document.getElementById('artPrompt').value.trim();
+  if(!prompt){ setArtStatus('✗ No prompt','err'); return; }
+
+  document.getElementById('genBtn').disabled = true;
+  document.getElementById('mapartActions').style.display = 'none';
+  document.getElementById('mapartWrap').style.display = 'none';
+  setArtStatus('<span class="spinner"></span>Sending to img4 (img2img)… ~20–40s', 'running');
+
+  try {
+    // img4 I2I — images[] takes the data URL directly
+    const resp = await fetch('https://api.infip.pro/v1/images/generations', {
+      method: 'POST',
+      headers:{
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'img4',
+        prompt,
+        images: [renderDataURL],
+        n: 1,
+        aspect: 'square',
+        response_format: 'url'
+      })
+    });
+
+    const json = await resp.json();
+    console.log('Ghostbot response:', JSON.stringify(json).slice(0, 500));
+
+    if(!resp.ok){
+      const detail = json?.detail || json?.error?.message || json?.message || JSON.stringify(json);
+      throw new Error(`HTTP ${resp.status}: ${detail}`);
+    }
+
+    // Async task polling
+    if(json.task_id){
+      setArtStatus('<span class="spinner"></span>Task queued — polling…', 'running');
+      const src = await pollTask(json.task_id, apiKey);
+      showResult(src); return;
+    }
+
+    // Sync response
+    let src = json?.data?.[0]?.url;
+    if(!src && json?.data?.[0]?.b64_json)
+      src = 'data:image/png;base64,' + json.data[0].b64_json;
+    if(!src) throw new Error('No image in response: ' + JSON.stringify(json).slice(0,300));
+
+    showResult(src);
+
+  } catch(err){
+    console.error('Generation error:', err);
+    setArtStatus(`✗ ${err?.message || String(err)}`, 'err');
+    document.getElementById('genBtn').disabled = false;
+  }
+}
+
+// ── Poll async task ────────────────────────────────────
+async function pollTask(taskId, apiKey, maxWait=120000){
+  const start = Date.now();
+  while(Date.now()-start < maxWait){
+    await new Promise(r=>setTimeout(r,3000));
+    const r = await fetch(`https://api.infip.pro/v1/tasks/${taskId}`,{
+      headers:{'Authorization':`Bearer ${apiKey}`}
+    });
+    const j = await r.json();
+    if(j.status==='completed'||j.status==='done')
+      return j?.data?.[0]?.url || j?.result?.url || j?.url;
+    if(j.status==='failed') throw new Error('Task failed: '+JSON.stringify(j));
+    setArtStatus(`<span class="spinner"></span>Processing… (${Math.round((Date.now()-start)/1000)}s)`, 'running');
+  }
+  throw new Error('Timed out after 2 minutes');
+}
+
+// ── Show result ────────────────────────────────────────
+function showResult(src){
+  const imgEl = document.getElementById('mapartImg');
+  imgEl.onload = ()=>{
+    document.getElementById('mapartWrap').style.display = 'block';
+    document.getElementById('mapartActions').style.display = 'flex';
+    document.getElementById('mapartRegen').style.display = 'inline-block';
+    setArtStatus('✓ Map art generated','done');
+    document.getElementById('genBtn').disabled = false;
+    document.getElementById('mapartDl').onclick = ()=>{
+      const a = document.createElement('a');
+      a.href = src; a.download = 'world_map_art.png'; a.click();
+    };
+  };
+  imgEl.onerror = ()=>{
+    setArtStatus('✗ Image failed to display','err');
+    document.getElementById('genBtn').disabled = false;
+  };
+  imgEl.src = src;
+}
+
+document.getElementById('genBtn').addEventListener('click', generateMapArt);
+document.getElementById('mapartRegen').addEventListener('click', generateMapArt);
+document.getElementById('mapartRegenBtn').addEventListener('click', generateMapArt);
+</script>
+</body>
+</html>
