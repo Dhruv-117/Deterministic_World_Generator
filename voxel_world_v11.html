@@ -301,7 +301,7 @@ document.getElementById('genBtn').addEventListener('click', async () => {
     
     const endpoint = isLocal 
       ? `http://127.0.0.1:5000/generate?seed=${seed}` 
-      : `/api/generate?seed=${seed}`;
+      : `https://YOUR_USERNAME-world-generator-api.hf.space/generate?seed=${seed}`;
     
     progBar.style.width = '30%';
     const resp = await fetch(endpoint);
