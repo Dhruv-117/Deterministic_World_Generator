@@ -1,23 +1,4 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "api/generate.py",
-      "use": "@vercel/python"
-    },
-    {
-      "src": "*.html",
-      "use": "@vercel/static"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/api/generate",
-      "dest": "api/generate.py"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/$1"
-    }
-  ]
+  "rootDirectory": "voxel-frontend",
+  "rewrites": [{ "source": "/", "destination": "/voxel_world_v11.html" }]
 }
