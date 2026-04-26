@@ -1,4 +1,3 @@
 {
-  "rootDirectory": "voxel-frontend",
   "rewrites": [{ "source": "/", "destination": "/voxel_world_v11.html" }]
 }
