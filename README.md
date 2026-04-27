@@ -9,8 +9,8 @@ Enter a seed → get a fully simulated planet with tectonics, rivers, lakes, bio
 
 | | URL |
 |---|---|
-| 🤗 Hugging Face API | `<!-- PASTE YOUR HF SPACE URL HERE e.g. https://huggingface.co/spaces/Dhruv-117/world-generator-api -->` |
-| 🌐 Vercel Frontend | `<!-- PASTE YOUR VERCEL URL HERE e.g. https://your-app.vercel.app -->` |
+| 🤗 Hugging Face API | `https://huggingface.co/spaces/Dhruv-117/world-generator-api` |
+| 🌐 Vercel Frontend | `https://deterministic-world-generator-x9fc.vercel.app/` |
 
 ---
 
